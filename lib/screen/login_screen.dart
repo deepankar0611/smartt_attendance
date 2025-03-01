@@ -3,7 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:smartt_attendance/screen/Sign%20Up.dart';
 
-
+   
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -44,7 +44,7 @@ class _LoginScreenState extends State<LoginScreen> {
         if (userCredential.user!.emailVerified) {
           // Successful login - Navigate to home screen
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Login successful!')),
+            SnackBar(content: Text('Login successfull!')),
           );
           // Add navigation to your home screen here
           // Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => HomeScreen()));
