@@ -3,9 +3,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:smartt_attendance/screen/Sign%20Up.dart';
 
-// You'll need to add these dependencies in pubspec.yaml:
-// firebase_auth: ^latest_version
-// cloud_firestore: ^latest_version
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
