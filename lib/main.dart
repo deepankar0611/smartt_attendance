@@ -1,6 +1,7 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
-import 'package:smartt_attendance/screen/home_screen.dart';
+import 'package:smartt_attendance/bottom_navigation_bar.dart';
+import 'package:smartt_attendance/screen/check_in_out_screen.dart';
 import 'package:smartt_attendance/screen/login_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -30,12 +31,14 @@ class MyApp extends StatelessWidget {
         future: FirebaseAuth.instance.authStateChanges().first,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+            return const Scaffold(
+              body: Center(child: CircularProgressIndicator()),
+            );
           }
           if (snapshot.hasData && snapshot.data != null) {
-            return HomeScreen();
+            return const BottomNavigationBarr(); // ✅ Return HomeScreen directly
           } else {
-            return LoginScreen();
+            return const LoginScreen();
           }
         },
       ),

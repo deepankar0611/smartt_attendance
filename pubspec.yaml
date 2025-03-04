@@ -23,6 +23,7 @@ dependencies:
   firebase_auth: ^5.5.1
   persistent_bottom_nav_bar: ^6.2.1
   lucide_icons:
+  intl:
 
 dev_dependencies:
   flutter_test:
