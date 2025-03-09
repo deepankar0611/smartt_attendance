@@ -1,82 +1,78 @@
 import 'package:flutter/material.dart';
-import 'package:persistent_bottom_nav_bar/persistent_bottom_nav_bar.dart';
-import 'package:smartt_attendance/screen/check_in_out_screen.dart';
+import 'package:smartt_attendance/screen/attendance-screen.dart';
 
-class BottomNavigationBarr extends StatefulWidget {
-  const BottomNavigationBarr({super.key});
-
+class HomeScreen extends StatefulWidget {
   @override
-  State<BottomNavigationBarr> createState() => _BottomNavigationBarr();
+  _HomeScreenState createState() => _HomeScreenState();
 }
 
-class _BottomNavigationBarr extends State<BottomNavigationBarr> {
-  final PersistentTabController _controller = PersistentTabController(initialIndex: 0);
+class _HomeScreenState extends State<HomeScreen> {
+  int _selectedIndex = 0;
+
+  final List<Widget> _pages = [
+    AttendanceScreen(),
+    Center(child: Text("Home Screen", style: TextStyle(fontSize: 24))),
+    Center(child: Text("Profile Screen", style: TextStyle(fontSize: 24))),
+  ];
+
+  void _onItemTapped(int index) {
+    setState(() {
+      _selectedIndex = index;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    return PersistentTabView(
-      context,
-      controller: _controller,
-      screens: _buildScreens(),
-      items: _navBarsItems(),
-      navBarStyle: NavBarStyle.style15, // Floating center button style
-      backgroundColor: Colors.white,
+    return Scaffold(
+      body: _pages[_selectedIndex], // Display the selected screen
+      bottomNavigationBar: Container(
+        margin: EdgeInsets.all(25),
+        height: 80,
+        decoration: BoxDecoration(
+          color: Colors.green[900],
+          borderRadius: BorderRadius.circular(50),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            _buildNavItem(Icons.home, "Home", 0),
+            _buildNavItem(Icons.calendar_month, "Attendance", 1),
+            _buildNavItem(Icons.person, "Profile", 2),
+          ],
+        ),
+      ),
     );
   }
 
-  List<Widget> _buildScreens() {
-    return [
-      const CheckInOutScreen(),
-      Center(child: Text('Search Screen')),
-      Center(child: Text('Add Screen')),
-      Center(child: Text('Messages Screen')),
-      Center(child: Text('Settings Screen')),
-    ];
-  }
-
-  List<PersistentBottomNavBarItem> _navBarsItems() {
-    return [
-      PersistentBottomNavBarItem(
-        icon: Icon(Icons.home, size: 22), // Adjust icon size
-        title: "Home",
-        textStyle: TextStyle(fontSize: 12, height: 1.0), // Reduce space
-        activeColorPrimary: Colors.blue,
-        inactiveColorPrimary: Colors.grey,
-        contentPadding: 0, // Minimize spacing
+  Widget _buildNavItem(IconData icon, String label, int index) {
+    bool isSelected = _selectedIndex == index;
+    return GestureDetector(
+      onTap: () => _onItemTapped(index),
+      child: AnimatedContainer(
+        height: 50, // Increased height of brown box
+        duration: Duration(milliseconds: 300),
+        padding: EdgeInsets.symmetric(horizontal: isSelected ? 20 : 10),
+        decoration: isSelected
+            ? BoxDecoration(
+          color: Colors.brown[300],
+          borderRadius: BorderRadius.circular(30),
+        )
+            : null,
+        child: Row(
+          children: [
+            Icon(icon, color: Colors.white),
+            if (isSelected)
+              Padding(
+                padding: EdgeInsets.only(left: 5),
+                child: Text(
+                  label,
+                  style: TextStyle(color: Colors.white, fontSize: 16),
+                ),
+              ),
+          ],
+        ),
       ),
-      PersistentBottomNavBarItem(
-        icon: Icon(Icons.search, size: 22),
-        title: "Search",
-        textStyle: TextStyle(fontSize: 12, height: 1.0),
-        activeColorPrimary: Colors.blue,
-        inactiveColorPrimary: Colors.grey,
-        contentPadding: 0,
-      ),
-      PersistentBottomNavBarItem(
-        icon: Icon(Icons.add, size: 28),
-        title: "Add",
-        textStyle: TextStyle(fontSize: 12, height: 1.0),
-        activeColorPrimary: Colors.white,
-        inactiveColorPrimary: Colors.white,
-        activeColorSecondary: Colors.blue,
-        contentPadding: 0,
-      ),
-      PersistentBottomNavBarItem(
-        icon: Icon(Icons.message, size: 22),
-        title: "Messages",
-        textStyle: TextStyle(fontSize: 12, height: 1.0),
-        activeColorPrimary: Colors.blue,
-        inactiveColorPrimary: Colors.grey,
-        contentPadding: 0,
-      ),
-      PersistentBottomNavBarItem(
-        icon: Icon(Icons.settings, size: 22),
-        title: "Settings",
-        textStyle: TextStyle(fontSize: 12, height: 1.0),
-        activeColorPrimary: Colors.blue,
-        inactiveColorPrimary: Colors.grey,
-        contentPadding: 0,
-      ),
-    ];
+    );
   }
 }
+
