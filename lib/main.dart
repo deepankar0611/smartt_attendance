@@ -4,6 +4,7 @@ import 'package:smartt_attendance/bottom_navigation_bar.dart';
 import 'package:smartt_attendance/screen/attendance-screen.dart';
 import 'package:smartt_attendance/screen/login_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:smartt_attendance/screen/profile%20page.dart';
 
 import 'firebase_options.dart';
 import 'models/bottom_sheet.dart';
@@ -38,9 +39,9 @@ class MyApp extends StatelessWidget {
             );
           }
           if (snapshot.hasData && snapshot.data != null) {
-            return  HomeScreen();
-          } else {
             return  LocationBottomSheet();
+          } else {
+            return  HomeScreen();
           }
         },
       ),

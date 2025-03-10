@@ -1,40 +1,106 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
-import 'package:shimmer/shimmer.dart'; // Import shimmer package
+import 'package:shimmer/shimmer.dart';
 
 class LocationBottomSheet extends StatefulWidget {
+  const LocationBottomSheet({super.key});
+
   @override
   _LocationBottomSheetState createState() => _LocationBottomSheetState();
 }
 
 class _LocationBottomSheetState extends State<LocationBottomSheet> {
-  double _dragPosition = 0.0; // Tracks the position of the swipe
-  bool _isPunchedIn = false; // Tracks if the user has punched in
+  double _dragPosition = 0.0;
+  bool _isPunchedIn = false;
+  String _currentAddress = "Fetching location...";
+  Position? _currentPosition;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchCurrentLocation();
+  }
+
+  Future<void> _fetchCurrentLocation() async {
+    bool serviceEnabled;
+    LocationPermission permission;
+
+    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      setState(() {
+        _currentAddress = "Location services are disabled.";
+      });
+      return;
+    }
+
+    permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        setState(() {
+          _currentAddress = "Location permissions denied.";
+        });
+        return;
+      }
+    }
+
+    if (permission == LocationPermission.deniedForever) {
+      setState(() {
+        _currentAddress = "Location permissions are permanently denied.";
+      });
+      return;
+    }
+
+    Position position = await Geolocator.getCurrentPosition(
+      desiredAccuracy: LocationAccuracy.high,
+    );
+
+    setState(() {
+      _currentPosition = position;
+    });
+
+    _getAddressFromLatLng(position);
+  }
+
+  Future<void> _getAddressFromLatLng(Position position) async {
+    try {
+      List<Placemark> placemarks =
+      await placemarkFromCoordinates(position.latitude, position.longitude);
+
+      if (placemarks.isNotEmpty) {
+        Placemark place = placemarks[0];
+
+        setState(() {
+          _currentAddress =
+          "${place.street}, ${place.locality}, ${place.postalCode}, ${place.country}";
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _currentAddress = "Failed to get address.";
+      });
+    }
+  }
 
   void _onHorizontalDragUpdate(DragUpdateDetails details, double maxWidth) {
     setState(() {
-      // Update drag position based on the swipe
       _dragPosition += details.delta.dx;
-
-      // Clamp the position so the circle doesn't move outside the container
       if (_dragPosition < 0) _dragPosition = 0;
       if (_dragPosition > maxWidth) _dragPosition = maxWidth;
     });
   }
 
   void _onHorizontalDragEnd(double maxWidth) {
-    // If the swipe is more than halfway, trigger punch-in
     if (_dragPosition >= maxWidth / 2 && !_isPunchedIn) {
       setState(() {
         _isPunchedIn = true;
-        _dragPosition = maxWidth; // Snap to the end
+        _dragPosition = maxWidth;
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Punched In!')),
       );
     } else {
-      // If not swiped far enough, reset to the start
       setState(() {
         _dragPosition = 0;
       });
@@ -43,83 +109,61 @@ class _LocationBottomSheetState extends State<LocationBottomSheet> {
 
   @override
   Widget build(BuildContext context) {
-    // Calculate the maximum width the circular button can travel
-    double maxWidth = MediaQuery.of(context).size.width - 32 - 65; // Screen width - padding - button width
+    double maxWidth = MediaQuery.of(context).size.width - 32 - 65;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Punch In'),
-      ),
+      appBar: AppBar(title: Text('Punch In')),
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(16.0),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Logo Placeholder
-              CircleAvatar(
-                radius: 50,
-                backgroundColor: Colors.grey,
-                child: Icon(
-                  Icons.business,
-                  size: 50,
-                  color: Colors.white,
-                ),
-              ),
-              SizedBox(height: 20),
-              // Company Name and Address
-              Text(
-                'Space Infotech Pvt. Ltd.',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(
-                    '4 Donnerville Hall, Donnerville Drive,',
-                    style: TextStyle(fontSize: 16),
+                  CircleAvatar(
+                    radius: 30,
+                    backgroundColor: Colors.grey,
+                    child: Icon(Icons.business, size: 30, color: Colors.white),
                   ),
-                  SizedBox(width: 5),
-                  Icon(Icons.check_circle, color: Colors.green, size: 16), // Verified checkmark
+                  SizedBox(width: 10),
+                  Flexible(
+                    child: Text(
+                      'Space Infotech Pvt. Ltd.',
+                      style:
+                      TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                    ),
+                  ),
                 ],
               ),
-              Text(
-                'Admastor, TFS 0DF',
-                style: TextStyle(fontSize: 16),
+              SizedBox(height: 10),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Flexible(
+                    child: Text(
+                      _currentAddress,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 16),
+                    ),
+                  ),
+                  SizedBox(width: 5),
+                  Icon(Icons.check_circle, color: Colors.green, size: 16),
+                ],
               ),
               SizedBox(height: 40),
-              // Custom Swipe to Punch In Button with Conditional Shimmer
               Stack(
                 alignment: Alignment.centerLeft,
                 children: [
-                  // Shimmer effect applied only when not punched in
-                  if (!_isPunchedIn)
-                    Shimmer.fromColors(
-                      baseColor: Colors.green[700]!,
-                      highlightColor: Colors.white,
-                      period: Duration(milliseconds: 1500),
-                      child: Container(
-                        width: double.infinity,
-                        height: 80,
-                        decoration: BoxDecoration(
-                          color: Colors.green,
-                          borderRadius: BorderRadius.circular(40),
-                        ),
-                      ),
-                    )
-                  else
-                    Container(
-                      width: double.infinity,
-                      height: 80,
-                      decoration: BoxDecoration(
-                        color: Colors.green,
-                        borderRadius: BorderRadius.circular(40),
-                      ),
+                  Container(
+                    width: double.infinity,
+                    height: 80,
+                    decoration: BoxDecoration(
+                      color: Colors.green,
+                      borderRadius: BorderRadius.circular(40),
                     ),
-                  // The circular button that can be dragged
+                  ),
                   Positioned(
                     left: _dragPosition,
                     child: GestureDetector(
@@ -144,7 +188,6 @@ class _LocationBottomSheetState extends State<LocationBottomSheet> {
                       ),
                     ),
                   ),
-                  // Center the "Swipe right to Punch In" text on top of the shimmer
                   Positioned.fill(
                     child: Center(
                       child: Text(

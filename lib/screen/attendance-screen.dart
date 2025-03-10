@@ -88,7 +88,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Hey Hassan!',
+                        'Hey Deepankar!',
                         style: TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
