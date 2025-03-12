@@ -41,7 +41,7 @@ class MyApp extends StatelessWidget {
           if (snapshot.hasData && snapshot.data != null) {
             return  LocationBottomSheet();
           } else {
-            return  HomeScreen();
+            return  LocationBottomSheet();
           }
         },
       ),
