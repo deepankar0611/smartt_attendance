@@ -1,16 +1,19 @@
 import 'package:flutter/material.dart';
-
+import '../models/bottom_sheet.dart';
 class AttendanceScreen extends StatefulWidget {
+  const AttendanceScreen({super.key});
+
   @override
   _AttendanceScreenState createState() => _AttendanceScreenState();
 }
 
 class _AttendanceScreenState extends State<AttendanceScreen> {
-  bool _isCheckedIn = false; // Track check-in status
-  DateTime? _checkInDateTime; // Store check-in DateTime for calculation
-  String? _checkInTime; // Store check-in time for display
-  String? _checkOutTime; // Store check-out time for display
-  String? _totalHours; // Store total hours worked
+  bool _isCheckedIn = false;
+  DateTime? _checkInDateTime;
+  String? _checkInTime;
+  String? _checkOutTime;
+  String? _totalHours;
+  bool _isShowingBottomSheet = false; // Add flag to prevent multiple triggers
 
   @override
   void initState() {
@@ -26,59 +29,74 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     });
   }
 
-  @override
-  void dispose() {
-    super.dispose();
+  void _handleCheckIn(DateTime punchTime) {
+    print("Handling Check-In at $punchTime");
+    setState(() {
+      _isCheckedIn = true;
+      _checkInDateTime = punchTime;
+      _checkInTime =
+      "${punchTime.hour}:${punchTime.minute.toString().padLeft(2, '0')} ${punchTime.hour >= 12 ? 'PM' : 'AM'}";
+      _checkOutTime = null;
+      _totalHours = null;
+      _isShowingBottomSheet = false; // Reset flag
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Checked In at $_checkInTime")),
+    );
   }
 
-  void _handleCheckInCheckOut() {
+  void _handleCheckOut(DateTime punchTime) {
+    print("Handling Check-Out at $punchTime");
     setState(() {
-      DateTime now = DateTime.now();
-      if (_isCheckedIn) {
-        // Handle Check Out
-        _checkOutTime = "${now.hour}:${now.minute.toString().padLeft(2, '0')} ${now.hour >= 12 ? 'PM' : 'AM'}";
-
-        // Calculate total hours worked
-        if (_checkInDateTime != null) {
-          Duration difference = now.difference(_checkInDateTime!);
-          int hours = difference.inHours;
-          int minutes = difference.inMinutes.remainder(60);
-          _totalHours = "${hours}h ${minutes}m";
-        }
-
-        // Reset for next cycle
-        _isCheckedIn = false;
-        _checkInDateTime = null;
-        print("Checked Out at $_checkOutTime, Total Hours: $_totalHours");
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Checked Out at $_checkOutTime\nTotal Hours: $_totalHours")),
-        );
-      } else {
-        // Handle Check In
-        _checkInDateTime = now;
-        _checkInTime = "${now.hour}:${now.minute.toString().padLeft(2, '0')} ${now.hour >= 12 ? 'PM' : 'AM'}";
-        _checkOutTime = null; // Clear previous check-out time
-        _totalHours = null; // Clear previous total hours
-        _isCheckedIn = true;
-        print("Checked In at $_checkInTime");
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Checked In at $_checkInTime")),
-        );
+      _checkOutTime =
+      "${punchTime.hour}:${punchTime.minute.toString().padLeft(2, '0')} ${punchTime.hour >= 12 ? 'PM' : 'AM'}";
+      if (_checkInDateTime != null) {
+        Duration difference = punchTime.difference(_checkInDateTime!);
+        int hours = difference.inHours;
+        int minutes = difference.inMinutes.remainder(60);
+        _totalHours = "${hours}h ${minutes}m";
       }
+      _isCheckedIn = false;
+      _checkInDateTime = null;
+      _isShowingBottomSheet = false; // Reset flag
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Checked Out at $_checkOutTime\nTotal Hours: $_totalHours")),
+    );
+  }
+
+  void _showLocationBottomSheet(bool isCheckIn) {
+    if (_isShowingBottomSheet) {
+      print("Bottom sheet already showing, skipping");
+      return; // Prevent multiple bottom sheets
+    }
+    print("Showing bottom sheet for ${isCheckIn ? 'Check-In' : 'Check-Out'}");
+    setState(() => _isShowingBottomSheet = true);
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => LocationBottomSheet(
+        onPunchIn: _handleCheckIn,
+        onPunchOut: isCheckIn ? null : _handleCheckOut,
+        isCheckIn: isCheckIn,
+      ),
+    ).whenComplete(() {
+      print("Bottom sheet closed");
+      setState(() => _isShowingBottomSheet = false);
     });
   }
 
   @override
   Widget build(BuildContext context) {
     DateTime now = DateTime.now();
-    String formattedTime = "${now.hour}:${now.minute.toString().padLeft(2, '0')} ${now.hour >= 12 ? 'PM' : 'AM'}";
-    String formattedDate = "${now.month.toString().padLeft(2, '0')}/${now.day.toString().padLeft(2, '0')}/${now.year} - ${DateTime.now().weekday == 1 ? 'Monday' : DateTime.now().weekday == 2 ? 'Tuesday' : DateTime.now().weekday == 3 ? 'Wednesday' : DateTime.now().weekday == 4 ? 'Thursday' : DateTime.now().weekday == 5 ? 'Friday' : DateTime.now().weekday == 6 ? 'Saturday' : 'Sunday'}";
+    String formattedTime =
+        "${now.hour}:${now.minute.toString().padLeft(2, '0')} ${now.hour >= 12 ? 'PM' : 'AM'}";
+    String formattedDate =
+        "${now.month.toString().padLeft(2, '0')}/${now.day.toString().padLeft(2, '0')}/${now.year} - ${_getWeekday(now.weekday)}";
 
     return Scaffold(
       body: SafeArea(
         child: Column(
           children: [
-            // Header Section
             Padding(
               padding: const EdgeInsets.all(16.0),
               child: Row(
@@ -87,81 +105,51 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'Hey Deepankar!',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      Text(
-                        'Good morning! Mark your attendance',
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: Colors.grey,
-                        ),
-                      ),
+                      Text('Hey Deepankar!',
+                          style: TextStyle(
+                              fontSize: 24, fontWeight: FontWeight.bold)),
+                      Text('Good morning! Mark your attendance',
+                          style: TextStyle(fontSize: 16, color: Colors.grey)),
                     ],
                   ),
                   CircleAvatar(
                     radius: 20,
-                    backgroundImage: NetworkImage(
-                        'https://via.placeholder.com/150'), // Replace with actual image URL
+                    backgroundImage:
+                    NetworkImage('https://via.placeholder.com/150'),
                   ),
                 ],
               ),
             ),
-            // Time and Date Section (Real-time from user's phone)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 20.0),
               child: Column(
                 children: [
-                  Text(
-                    formattedTime,
-                    style: TextStyle(
-                      fontSize: 48,
-                      fontWeight: FontWeight.normal,
-                    ),
-                  ),
-                  Text(
-                    formattedDate,
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Colors.grey,
-                    ),
-                  ),
+                  Text(formattedTime,
+                      style:
+                      TextStyle(fontSize: 48, fontWeight: FontWeight.normal)),
+                  Text(formattedDate,
+                      style: TextStyle(fontSize: 16, color: Colors.grey)),
                 ],
               ),
             ),
-            // Clickable Neumorphic Check In/Check Out Button
             Center(
               child: NeumorphicCheckInButton(
                 isCheckedIn: _isCheckedIn,
-                onTap: _handleCheckInCheckOut,
+                onTap: () => _showLocationBottomSheet(_isCheckedIn ? false : true),
               ),
             ),
             SizedBox(height: 90),
-            // Additional Options with Custom Icons
             Padding(
               padding: const EdgeInsets.all(20.0),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
-                  _buildCustomOption(
-                    Icons.arrow_downward,
-                    'Check In',
-                    time: _checkInTime,
-                  ),
-                  _buildCustomOption(
-                    Icons.arrow_upward,
-                    'Check Out',
-                    time: _checkOutTime,
-                  ),
-                  _buildCustomOption(
-                    Icons.check,
-                    'Total Hrs',
-                    time: _totalHours,
-                  ),
+                  _buildCustomOption(Icons.arrow_downward, 'Check In',
+                      time: _checkInTime),
+                  _buildCustomOption(Icons.arrow_upward, 'Check Out',
+                      time: _checkOutTime),
+                  _buildCustomOption(Icons.check, 'Total Hrs',
+                      time: _totalHours),
                 ],
               ),
             ),
@@ -169,6 +157,19 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         ),
       ),
     );
+  }
+
+  String _getWeekday(int weekday) {
+    const days = [
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+      'Sunday'
+    ];
+    return days[weekday - 1];
   }
 
   Widget _buildCustomOption(IconData icon, String label, {String? time}) {
@@ -184,45 +185,28 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             border: Border.all(color: Colors.green, width: 2),
           ),
           child: Center(
-            child: Icon(
-              icon,
-              size: 30,
-              color: Colors.green,
-            ),
+            child: Icon(icon, size: 30, color: Colors.green),
           ),
         ),
         SizedBox(height: 5),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 16,
-            color: Colors.grey,
-          ),
-        ),
+        Text(label,
+            style: TextStyle(fontSize: 16, color: Colors.grey)),
         if (time != null) ...[
           SizedBox(height: 5),
-          Text(
-            time,
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey,
-            ),
-          ),
-        ],
-        // Remove dotted line when time is present
-        if (time == null) ...[
+          Text(time, style: TextStyle(fontSize: 14, color: Colors.grey)),
+        ] else ...[
           SizedBox(height: 5),
           Row(
             mainAxisSize: MainAxisSize.min,
-            children: List.generate(5, (index) => Container(
-              width: 4,
-              height: 4,
-              margin: EdgeInsets.symmetric(horizontal: 1),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.grey,
-              ),
-            )),
+            children: List.generate(
+                5,
+                    (index) => Container(
+                  width: 4,
+                  height: 4,
+                  margin: EdgeInsets.symmetric(horizontal: 1),
+                  decoration: BoxDecoration(
+                      shape: BoxShape.circle, color: Colors.grey),
+                )),
           ),
         ],
       ],
@@ -230,37 +214,20 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   }
 }
 
-// Neumorphic Check In Button as a StatefulWidget to handle press state
 class NeumorphicCheckInButton extends StatefulWidget {
   final bool isCheckedIn;
   final VoidCallback onTap;
 
-  NeumorphicCheckInButton({required this.isCheckedIn, required this.onTap});
+  const NeumorphicCheckInButton(
+      {super.key, required this.isCheckedIn, required this.onTap});
 
   @override
-  _NeumorphicCheckInButtonState createState() => _NeumorphicCheckInButtonState();
+  _NeumorphicCheckInButtonState createState() =>
+      _NeumorphicCheckInButtonState();
 }
 
 class _NeumorphicCheckInButtonState extends State<NeumorphicCheckInButton> {
   bool _isPressed = false;
-
-  void _onTapDown(TapDownDetails details) {
-    setState(() {
-      _isPressed = true;
-    });
-  }
-
-  void _onTapUp(TapUpDetails details) {
-    setState(() {
-      _isPressed = false;
-    });
-  }
-
-  void _onTapCancel() {
-    setState(() {
-      _isPressed = false;
-    });
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -268,10 +235,13 @@ class _NeumorphicCheckInButtonState extends State<NeumorphicCheckInButton> {
     String buttonText = widget.isCheckedIn ? "Check Out" : "Check In";
 
     return GestureDetector(
-      onTapDown: _onTapDown,
-      onTapUp: _onTapUp,
-      onTapCancel: _onTapCancel,
-      onTap: widget.onTap,
+      onTapDown: (_) => setState(() => _isPressed = true),
+      onTapUp: (_) {
+        print("Button tapped: ${widget.isCheckedIn ? 'Check Out' : 'Check In'}");
+        setState(() => _isPressed = false);
+        widget.onTap();
+      },
+      onTapCancel: () => setState(() => _isPressed = false),
       child: Container(
         width: 200,
         height: 200,
@@ -286,13 +256,17 @@ class _NeumorphicCheckInButtonState extends State<NeumorphicCheckInButton> {
                 color: Colors.grey[200],
                 boxShadow: [
                   BoxShadow(
-                    color: _isPressed ? Colors.grey[400]! : Colors.white.withOpacity(0.8),
+                    color: _isPressed
+                        ? Colors.grey[400]!
+                        : Colors.white.withOpacity(0.8),
                     offset: _isPressed ? Offset(5, 5) : Offset(-5, -5),
                     blurRadius: 15,
                     spreadRadius: 1,
                   ),
                   BoxShadow(
-                    color: _isPressed ? Colors.white.withOpacity(0.8) : Colors.grey[400]!,
+                    color: _isPressed
+                        ? Colors.white.withOpacity(0.8)
+                        : Colors.grey[400]!,
                     offset: _isPressed ? Offset(-5, -5) : Offset(5, 5),
                     blurRadius: 15,
                     spreadRadius: 1,
@@ -308,13 +282,17 @@ class _NeumorphicCheckInButtonState extends State<NeumorphicCheckInButton> {
                 color: Colors.grey[300],
                 boxShadow: [
                   BoxShadow(
-                    color: _isPressed ? Colors.white.withOpacity(0.7) : Colors.grey[500]!,
+                    color: _isPressed
+                        ? Colors.white.withOpacity(0.7)
+                        : Colors.grey[500]!,
                     offset: _isPressed ? Offset(-5, -5) : Offset(5, 5),
                     blurRadius: 10,
                     spreadRadius: -2,
                   ),
                   BoxShadow(
-                    color: _isPressed ? Colors.grey[500]! : Colors.white.withOpacity(0.7),
+                    color: _isPressed
+                        ? Colors.grey[500]!
+                        : Colors.white.withOpacity(0.7),
                     offset: _isPressed ? Offset(5, 5) : Offset(-5, -5),
                     blurRadius: 10,
                     spreadRadius: -2,
@@ -324,19 +302,10 @@ class _NeumorphicCheckInButtonState extends State<NeumorphicCheckInButton> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(
-                    Icons.touch_app,
-                    size: 40,
-                    color: buttonColor,
-                  ),
+                  Icon(Icons.touch_app, size: 40, color: buttonColor),
                   SizedBox(height: 10),
-                  Text(
-                    buttonText,
-                    style: TextStyle(
-                      fontSize: 20,
-                      color: buttonColor,
-                    ),
-                  ),
+                  Text(buttonText,
+                      style: TextStyle(fontSize: 20, color: buttonColor)),
                 ],
               ),
             ),

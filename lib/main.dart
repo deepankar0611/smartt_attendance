@@ -39,9 +39,9 @@ class MyApp extends StatelessWidget {
             );
           }
           if (snapshot.hasData && snapshot.data != null) {
-            return  LocationBottomSheet();
+            return  AttendanceScreen();
           } else {
-            return  LocationBottomSheet();
+            return  AttendanceScreen();
           }
         },
       ),
