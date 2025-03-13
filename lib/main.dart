@@ -1,18 +1,21 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:smartt_attendance/bottom_navigation_bar.dart';
-import 'package:smartt_attendance/screen/check_in_out_screen.dart';
+import 'package:smartt_attendance/screen/attendance-screen.dart';
 import 'package:smartt_attendance/screen/login_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:smartt_attendance/screen/profile%20page.dart';
 
 import 'firebase_options.dart';
+import 'models/bottom_sheet.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-  runApp(const MyApp());
+  runApp(
+     const MyApp());
 }
 
 class MyApp extends StatelessWidget {
@@ -36,9 +39,9 @@ class MyApp extends StatelessWidget {
             );
           }
           if (snapshot.hasData && snapshot.data != null) {
-            return const BottomNavigationBarr(); // ✅ Return HomeScreen directly
+            return  AttendanceScreen();
           } else {
-            return const LoginScreen();
+            return  AttendanceScreen();
           }
         },
       ),
