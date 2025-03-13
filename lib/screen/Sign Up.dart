@@ -49,7 +49,6 @@ class _SignUpState extends State<SignUp> with SingleTickerProviderStateMixin {
       ),
     );
   }
-
   @override
   void dispose() {
     _nameController.dispose();
