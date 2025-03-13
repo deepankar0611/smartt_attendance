@@ -4,8 +4,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:smartt_attendance/screen/Sign%20Up.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
+import '../student/homepage.dart';
+
+enum UserType { student, teacher }
+
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  const LoginScreen({Key? key}) : super(key: key);
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -13,40 +17,25 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen>
     with SingleTickerProviderStateMixin {
-  // Controllers
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-
-  // Firebase
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-
-  // Loading state
   bool _isLoading = false;
+  UserType _selectedUserType = UserType.student; // Default to student
 
-  // Animation for the button
   late AnimationController _buttonAnimationController;
   late Animation<double> _buttonScaleAnimation;
 
   @override
   void initState() {
     super.initState();
-
-    // Initialize button animation controller
     _buttonAnimationController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 200), // Faster animation
+      duration: const Duration(milliseconds: 200),
     );
-
-    // Create a scale animation for the button
-    _buttonScaleAnimation = Tween<double>(
-      begin: 1.0,
-      end: 0.95, // Slightly smaller scale
-    ).animate(
-      CurvedAnimation(
-        parent: _buttonAnimationController,
-        curve: Curves.easeInOut,
-      ),
+    _buttonScaleAnimation = Tween<double>(begin: 1.0, end: 0.95).animate(
+      CurvedAnimation(parent: _buttonAnimationController, curve: Curves.easeInOut),
     );
   }
 
@@ -58,7 +47,6 @@ class _LoginScreenState extends State<LoginScreen>
     super.dispose();
   }
 
-  // Login Method
   Future<void> _login() async {
     if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -67,7 +55,6 @@ class _LoginScreenState extends State<LoginScreen>
       return;
     }
 
-    // Animate the button press
     await _buttonAnimationController.forward();
     await _buttonAnimationController.reverse();
 
@@ -81,8 +68,11 @@ class _LoginScreenState extends State<LoginScreen>
         password: _passwordController.text.trim(),
       );
 
+      // Get user document from the correct collection based on user type
+      String collectionName =
+      _selectedUserType == UserType.student ? 'students' : 'teachers';
       DocumentSnapshot userDoc = await _firestore
-          .collection('users')
+          .collection(collectionName)
           .doc(userCredential.user!.uid)
           .get();
 
@@ -91,8 +81,13 @@ class _LoginScreenState extends State<LoginScreen>
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Login successful!')),
           );
-          // Navigate to your home screen here
-          // Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => HomeScreen()));
+          // Navigate to the appropriate home screen based on user type
+          // if (_selectedUserType == UserType.student) {
+          //   Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => StudentHomeScreen()));
+          // } else {
+          //   Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => TeacherHomeScreen()));
+          // }
+
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -107,8 +102,11 @@ class _LoginScreenState extends State<LoginScreen>
           );
         }
       } else {
+        // User exists in 'users' but not in 'students' or 'teachers'
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('User data not found')),
+          const SnackBar(
+              content: Text(
+                  'User data not found. Please register as a Student or Teacher.')),
         );
       }
     } on FirebaseAuthException catch (e) {
@@ -136,7 +134,7 @@ class _LoginScreenState extends State<LoginScreen>
     }
   }
 
-  // Build UI
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -155,19 +153,7 @@ class _LoginScreenState extends State<LoginScreen>
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  //  Title
-                  const Text(
-                    'Already have an Account?',
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
-                    ),
-                  ),
-
                   const SizedBox(height: 30),
-
-                  // Fingerprint Icon (using LucideIcons)
                   Container(
                     padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
@@ -190,7 +176,17 @@ class _LoginScreenState extends State<LoginScreen>
                   ),
                   const SizedBox(height: 40),
 
-                  // Email Field
+                  // User Type Selection
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _buildUserTypeButton(UserType.student, 'Student'),
+                      const SizedBox(width: 20),
+                      _buildUserTypeButton(UserType.teacher, 'Teacher'),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+
                   _buildTextField(
                     controller: _emailController,
                     labelText: 'Email',
@@ -199,8 +195,6 @@ class _LoginScreenState extends State<LoginScreen>
                     keyboardType: TextInputType.emailAddress,
                   ),
                   const SizedBox(height: 20),
-
-                  // Password Field
                   _buildTextField(
                     controller: _passwordController,
                     labelText: 'Password',
@@ -208,8 +202,6 @@ class _LoginScreenState extends State<LoginScreen>
                     obscureText: true,
                   ),
                   const SizedBox(height: 30),
-
-                  // Login Button
                   ScaleTransition(
                     scale: _buttonScaleAnimation,
                     child: ElevatedButton(
@@ -232,15 +224,21 @@ class _LoginScreenState extends State<LoginScreen>
                           strokeWidth: 3.0,
                         ),
                       )
-                          : const Text(
-                        'Login',
-                        style: TextStyle(fontSize: 18, color: Colors.white),
+                          : TextButton(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => const TeacherDashboard()),
+                          );
+                        },
+                        child: const Text(
+                          'login',
+                          style: TextStyle(color: Colors.teal, fontSize: 16),
+                        ),
                       ),
                     ),
                   ),
                   const SizedBox(height: 20),
-
-                  // Register Button
                   TextButton(
                     onPressed: () {
                       Navigator.push(
@@ -253,16 +251,12 @@ class _LoginScreenState extends State<LoginScreen>
                       style: TextStyle(color: Colors.teal, fontSize: 16),
                     ),
                   ),
-
                   const SizedBox(height: 30),
-                  // Other Methods Text
                   const Text(
                     'Or sign in with',
                     style: TextStyle(color: Colors.grey),
                   ),
                   const SizedBox(height: 15),
-
-                  // Social Login Buttons
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -281,7 +275,6 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 
-  // Helper function for text fields
   Widget _buildTextField({
     required TextEditingController controller,
     required String labelText,
@@ -323,7 +316,6 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 
-  // Helper function for social buttons
   Widget _buildSocialButton(
       IconData icon, Color color, VoidCallback onPressed) {
     return InkWell(
@@ -343,6 +335,29 @@ class _LoginScreenState extends State<LoginScreen>
           ],
         ),
         child: Icon(icon, color: color, size: 28),
+      ),
+    );
+  }
+  Widget _buildUserTypeButton(UserType type, String label) {
+    return ElevatedButton(
+      onPressed: () {
+        setState(() {
+          _selectedUserType = type;
+        });
+      },
+      style: ElevatedButton.styleFrom(
+        backgroundColor: _selectedUserType == type ? Colors.teal : Colors.white,
+        padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 12),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: _selectedUserType == type ? Colors.white : Colors.teal,
+          fontSize: 16,
+        ),
       ),
     );
   }
