@@ -4,8 +4,8 @@ import 'dart:ui';
 import 'package:lottie/lottie.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geolocator/geolocator.dart';
-import '../models/bottom_sheet.dart'; // LocationBottomSheet
-import 'history.dart'; // AttendanceHistoryScreen
+import '../models/bottom_sheet.dart';
+import 'history.dart';
 
 class AttendanceScreen extends StatefulWidget {
   const AttendanceScreen({super.key});
