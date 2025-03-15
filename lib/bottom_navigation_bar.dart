@@ -4,6 +4,8 @@ import 'package:smartt_attendance/screen/history.dart';
 import 'package:smartt_attendance/screen/profile.dart';
 
 class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
+
   @override
   _HomeScreenState createState() => _HomeScreenState();
 }
@@ -11,10 +13,11 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
 
-  final List<Widget> _pages = [
+  // Use const where possible to avoid unnecessary rebuilds
+  final List<Widget> _pages = const [
     AttendanceScreen(),
-    AttendanceHistoryScreen(),
-    ModernProfilePage(),
+    AttendanceHistoryScreen(userEmail: 'deepankarsingh1@gmail.com', attendanceData: [],), // Match with AttendanceScreen
+    ProfilePage1(),
   ];
 
   void _onItemTapped(int index) {
@@ -29,17 +32,24 @@ class _HomeScreenState extends State<HomeScreen> {
       backgroundColor: Colors.white,
       body: _pages[_selectedIndex], // Display the selected screen
       bottomNavigationBar: Container(
-        margin: EdgeInsets.all(15),
+        margin: const EdgeInsets.all(15),
         height: 70,
         decoration: BoxDecoration(
           color: Colors.green[900],
           borderRadius: BorderRadius.circular(30),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 10,
+              offset: const Offset(0, 5),
+            ),
+          ],
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
-            _buildNavItem(Icons.home, "attendence", 0),
-            _buildNavItem(Icons.calendar_month, "history", 1),
+            _buildNavItem(Icons.home, "Attendance", 0),
+            _buildNavItem(Icons.calendar_month, "History", 1),
             _buildNavItem(Icons.person, "Profile", 2),
           ],
         ),
@@ -52,24 +62,31 @@ class _HomeScreenState extends State<HomeScreen> {
     return GestureDetector(
       onTap: () => _onItemTapped(index),
       child: AnimatedContainer(
-        height: 50, // Increased height of brown box
-        duration: Duration(milliseconds: 300),
-        padding: EdgeInsets.symmetric(horizontal: isSelected ? 20 : 10),
+        duration: const Duration(milliseconds: 300),
+        padding: EdgeInsets.symmetric(horizontal: isSelected ? 20 : 10, vertical: 10),
         decoration: isSelected
             ? BoxDecoration(
-          color: Colors.brown[300],
-          borderRadius: BorderRadius.circular(30),
+          color: Colors.green[700],
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.2),
+              blurRadius: 5,
+              offset: const Offset(0, 3),
+            ),
+          ],
         )
             : null,
         child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: Colors.white),
+            Icon(icon, color: Colors.white, size: 24),
             if (isSelected)
               Padding(
-                padding: EdgeInsets.only(left: 5),
+                padding: const EdgeInsets.only(left: 8),
                 child: Text(
                   label,
-                  style: TextStyle(color: Colors.white, fontSize: 16),
+                  style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
                 ),
               ),
           ],
@@ -78,4 +95,3 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 }
-

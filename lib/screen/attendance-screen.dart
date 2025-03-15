@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:ui';
-import '../models/bottom_sheet.dart';
-import 'package:lottie/lottie.dart'; // Import Lottie for animated icons
+import 'package:lottie/lottie.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:geolocator/geolocator.dart';
+import '../models/bottom_sheet.dart'; // LocationBottomSheet
+import 'history.dart'; // AttendanceHistoryScreen
 
 class AttendanceScreen extends StatefulWidget {
   const AttendanceScreen({super.key});
@@ -22,6 +25,14 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
 
+  // Firebase instance
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final String _userEmail = 'deepankarsingh1@gmail.com'; // Hardcoded; replace with auth email in production
+
+  // Location data
+  Position? _checkInLocation;
+  Position? _checkOutLocation;
+
   @override
   void initState() {
     super.initState();
@@ -35,6 +46,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
       curve: Curves.easeInOut,
     );
     _animationController.forward();
+    _initializeUserData();
+    _requestLocationPermission();
   }
 
   @override
@@ -51,9 +64,59 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
     });
   }
 
-  void _handleCheckIn(DateTime punchTime) {
+  Future<void> _requestLocationPermission() async {
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        print('Location permissions are denied');
+        return;
+      }
+    }
+    if (permission == LocationPermission.deniedForever) {
+      print('Location permissions are permanently denied');
+      return;
+    }
+  }
+
+  Future<Position> _getCurrentLocation() async {
+    return await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+  }
+
+  Future<void> _initializeUserData() async {
+    try {
+      DocumentSnapshot userDoc = await _firestore.collection('users').doc(_userEmail).get();
+      if (!userDoc.exists) {
+        await _firestore.collection('users').doc(_userEmail).set({
+          'createdAt': FieldValue.serverTimestamp(),
+          'email': _userEmail,
+          'isEmailVerified': false,
+          'mobile': '1234567890',
+          'name': 'deep',
+        });
+      }
+    } catch (e) {
+      print('Error initializing user data: $e');
+    }
+  }
+
+  Future<void> _saveAttendance(Map<String, dynamic> attendanceData) async {
+    try {
+      await _firestore
+          .collection('users')
+          .doc(_userEmail)
+          .collection('attendance')
+          .add(attendanceData);
+    } catch (e) {
+      print('Error saving attendance: $e');
+    }
+  }
+
+  void _handleCheckIn(DateTime punchTime) async {
     HapticFeedback.mediumImpact();
     final formattedTime = _formatTime(punchTime);
+    _checkInLocation = await _getCurrentLocation(); // Capture check-in location
+
     setState(() {
       _isCheckedIn = true;
       _checkInDateTime = punchTime;
@@ -66,23 +129,49 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
     _showAnimatedSnackBar("Check-in successful", "Checked in at $formattedTime", Icons.check_circle_rounded);
   }
 
-  void _handleCheckOut(DateTime punchTime) {
+  void _handleCheckOut(DateTime punchTime) async {
     HapticFeedback.mediumImpact();
     final formattedTime = _formatTime(punchTime);
+    _checkOutLocation = await _getCurrentLocation(); // Capture check-out location
+    String totalHours = '';
+    if (_checkInDateTime != null) {
+      Duration difference = punchTime.difference(_checkInDateTime!);
+      int hours = difference.inHours;
+      int minutes = difference.inMinutes.remainder(60);
+      totalHours = "${hours}h ${minutes}m";
+    }
+
+    // Create attendance record with location data
+    final attendanceRecord = {
+      'checkInTime': _checkInTime ?? '--:--',
+      'checkInLocation': _checkInLocation != null
+          ? {'latitude': _checkInLocation!.latitude, 'longitude': _checkInLocation!.longitude}
+          : null,
+      'checkOutTime': formattedTime,
+      'checkOutLocation': _checkOutLocation != null
+          ? {'latitude': _checkOutLocation!.latitude, 'longitude': _checkOutLocation!.longitude}
+          : null,
+      'totalHours': totalHours,
+      'date': punchTime,
+      'status': _checkInDateTime != null && _checkInDateTime!.hour < 9 ? 'On Time' : 'Late',
+      'notes': '',
+      'breaks': [],
+    };
+
+    // Save to Firestore subcollection
+    await _saveAttendance(attendanceRecord);
+
     setState(() {
       _checkOutTime = formattedTime;
-      if (_checkInDateTime != null) {
-        Duration difference = punchTime.difference(_checkInDateTime!);
-        int hours = difference.inHours;
-        int minutes = difference.inMinutes.remainder(60);
-        _totalHours = "${hours}h ${minutes}m";
-      }
+      _totalHours = totalHours;
       _isCheckedIn = false;
       _checkInDateTime = null;
       _isShowingBottomSheet = false;
       _isBlurred = false;
+      _checkInLocation = null;
+      _checkOutLocation = null;
     });
-    _showAnimatedSnackBar("Check-out successful", "Total hours: $_totalHours", Icons.access_time_filled_rounded);
+    _showAnimatedSnackBar("Check-out successful", "Total hours: $totalHours", Icons.access_time_filled_rounded);
   }
 
   String _formatTime(DateTime time) {
@@ -132,18 +221,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                   children: [
                     Text(
                       title,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                        color: Colors.white,
-                      ),
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white),
                     ),
                     Text(
                       message,
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.9),
-                        fontSize: 14,
-                      ),
+                      style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 14),
                     ),
                   ],
                 ),
@@ -196,23 +278,16 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                  colors: [
-                    Colors.grey[50]!,
-                    Colors.grey[100]!,
-                    Colors.grey[200]!,
-                  ],
+                  colors: [Colors.grey[50]!, Colors.grey[100]!, Colors.grey[200]!],
                 ),
               ),
             ),
             AnimatedContainer(
               duration: const Duration(milliseconds: 300),
               child: BackdropFilter(
-                filter: ImageFilter.blur(
-                  sigmaX: _isBlurred ? 5.0 : 0.0,
-                  sigmaY: _isBlurred ? 5.0 : 0.0,
-                ),
+                filter: ImageFilter.blur(sigmaX: _isBlurred ? 5.0 : 0.0, sigmaY: _isBlurred ? 5.0 : 0.0),
                 child: SafeArea(
-                  child: Padding(
+                  child: SingleChildScrollView(
                     padding: const EdgeInsets.symmetric(horizontal: 20.0),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -222,8 +297,27 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                         _buildTimeDisplay(),
                         const SizedBox(height: 40),
                         _buildAttendanceButton(),
-                        const Spacer(),
+                        const SizedBox(height: 40),
                         _buildAttendanceStats(),
+                        const SizedBox(height: 20),
+                        Center(
+                          child: ElevatedButton(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => AttendanceHistoryScreen(userEmail: _userEmail, attendanceData: [],),
+                                ),
+                              );
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.blue[700],
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            child: const Text('View Attendance History'),
+                          ),
+                        ),
                         const SizedBox(height: 20),
                       ],
                     ),
@@ -248,21 +342,12 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
             children: [
               Text(
                 'Hey Deepankar!',
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey[800],
-                  letterSpacing: -0.5,
-                ),
+                style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.grey[800], letterSpacing: -0.5),
               ),
               const SizedBox(height: 4),
               Row(
                 children: [
-                  Icon(
-                    Icons.wb_sunny_rounded,
-                    size: 16,
-                    color: Colors.amber[600],
-                  ),
+                  Icon(Icons.wb_sunny_rounded, size: 16, color: Colors.amber[600]),
                   const SizedBox(width: 6),
                   AnimatedDefaultTextStyle(
                     duration: const Duration(milliseconds: 300),
@@ -282,9 +367,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
             child: Material(
               elevation: 8,
               shadowColor: Colors.black38,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(24),
-              ),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
               child: Container(
                 padding: const EdgeInsets.all(2),
                 decoration: BoxDecoration(
@@ -298,7 +381,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                 child: const CircleAvatar(
                   radius: 24,
                   backgroundColor: Colors.white,
-                  backgroundImage: NetworkImage('https://via.placeholder.com/150'),
+                  backgroundImage: AssetImage('assets/ab.jpg'),
                 ),
               ),
             ),
@@ -321,10 +404,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
             duration: const Duration(milliseconds: 1000),
             curve: Curves.elasticOut,
             builder: (context, value, child) {
-              return Transform.scale(
-                scale: value,
-                child: child,
-              );
+              return Transform.scale(scale: value, child: child);
             },
             child: ShaderMask(
               shaderCallback: (bounds) => LinearGradient(
@@ -334,12 +414,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
               ).createShader(bounds),
               child: Text(
                 formattedTime,
-                style: const TextStyle(
-                  fontSize: 60,
-                  fontWeight: FontWeight.w300,
-                  letterSpacing: -1.5,
-                  color: Colors.white,
-                ),
+                style: const TextStyle(fontSize: 60, fontWeight: FontWeight.w300, letterSpacing: -1.5, color: Colors.white),
               ),
             ),
           ),
@@ -353,13 +428,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                 end: Alignment.bottomRight,
               ),
               borderRadius: BorderRadius.circular(30),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.grey.withOpacity(0.15),
-                  blurRadius: 8,
-                  offset: const Offset(0, 4),
-                ),
-              ],
+              boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.15), blurRadius: 8, offset: const Offset(0, 4))],
               border: Border.all(color: Colors.white, width: 1.5),
             ),
             child: Row(
@@ -394,42 +463,17 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-            spreadRadius: 0,
-          ),
-        ],
+        boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.1), blurRadius: 20, offset: const Offset(0, 10), spreadRadius: 0)],
         border: Border.all(color: Colors.grey.shade100, width: 1),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          _buildStatItem(
-            _isCheckedIn ? Icons.login_rounded : Icons.schedule_rounded,
-            'Check In',
-            _checkInTime,
-            Colors.green.shade700,
-            'check-in',
-          ),
+          _buildStatItem(_isCheckedIn ? Icons.login_rounded : Icons.schedule_rounded, 'Check In', _checkInTime, Colors.green.shade700, 'check-in'),
           _buildDivider(),
-          _buildStatItem(
-            _isCheckedIn ? Icons.logout_rounded : Icons.schedule_rounded,
-            'Check Out',
-            _checkOutTime,
-            Colors.red.shade700,
-            'check-out',
-          ),
+          _buildStatItem(_isCheckedIn ? Icons.logout_rounded : Icons.schedule_rounded, 'Check Out', _checkOutTime, Colors.red.shade700, 'check-out'),
           _buildDivider(),
-          _buildStatItem(
-            _isCheckedIn ? Icons.timelapse_rounded : Icons.timer_rounded,
-            'Total',
-            _totalHours,
-            Colors.blue.shade700,
-            'total-hours',
-          ),
+          _buildStatItem(_isCheckedIn ? Icons.timelapse_rounded : Icons.timer_rounded, 'Total', _totalHours, Colors.blue.shade700, 'total-hours'),
         ],
       ),
     );
@@ -441,11 +485,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
       width: 1,
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [
-            Colors.grey[200]!.withOpacity(0.5),
-            Colors.grey[400]!.withOpacity(0.8),
-            Colors.grey[200]!.withOpacity(0.5),
-          ],
+          colors: [Colors.grey[200]!.withOpacity(0.5), Colors.grey[400]!.withOpacity(0.8), Colors.grey[200]!.withOpacity(0.5)],
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
         ),
@@ -461,44 +501,18 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 300),
             transitionBuilder: (Widget child, Animation<double> animation) {
-              return ScaleTransition(
-                scale: animation,
-                child: FadeTransition(
-                  opacity: animation,
-                  child: child,
-                ),
-              );
+              return ScaleTransition(scale: animation, child: FadeTransition(opacity: animation, child: child));
             },
             child: CircleAvatar(
               radius: 20,
               backgroundColor: color.withOpacity(0.1),
-              child: Icon(
-                icon,
-                color: color,
-                size: 24,
-                key: ValueKey<String>('$animationKey-$time'),
-              ),
+              child: Icon(icon, color: color, size: 24, key: ValueKey<String>('$animationKey-$time')),
             ),
           ),
           const SizedBox(height: 12),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey[600],
-              fontWeight: FontWeight.w500,
-            ),
-          ),
+          Text(label, style: TextStyle(fontSize: 14, color: Colors.grey[600], fontWeight: FontWeight.w500)),
           const SizedBox(height: 6),
-          Text(
-            time ?? '--:--',
-            style: TextStyle(
-              fontSize: 16,
-              color: Colors.grey[800],
-              fontWeight: FontWeight.bold,
-              letterSpacing: -0.5,
-            ),
-          ),
+          Text(time ?? '--:--', style: TextStyle(fontSize: 16, color: Colors.grey[800], fontWeight: FontWeight.bold, letterSpacing: -0.5)),
         ],
       ),
     );
@@ -506,53 +520,32 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
 
   String _getWeekday(int weekday) {
     switch (weekday) {
-      case 1:
-        return 'Monday';
-      case 2:
-        return 'Tuesday';
-      case 3:
-        return 'Wednesday';
-      case 4:
-        return 'Thursday';
-      case 5:
-        return 'Friday';
-      case 6:
-        return 'Saturday';
-      case 7:
-        return 'Sunday';
-      default:
-        return '';
+      case 1: return 'Monday';
+      case 2: return 'Tuesday';
+      case 3: return 'Wednesday';
+      case 4: return 'Thursday';
+      case 5: return 'Friday';
+      case 6: return 'Saturday';
+      case 7: return 'Sunday';
+      default: return '';
     }
   }
 
   String _getMonth(int month) {
     switch (month) {
-      case 1:
-        return 'January';
-      case 2:
-        return 'February';
-      case 3:
-        return 'March';
-      case 4:
-        return 'April';
-      case 5:
-        return 'May';
-      case 6:
-        return 'June';
-      case 7:
-        return 'July';
-      case 8:
-        return 'August';
-      case 9:
-        return 'September';
-      case 10:
-        return 'October';
-      case 11:
-        return 'November';
-      case 12:
-        return 'December';
-      default:
-        return '';
+      case 1: return 'January';
+      case 2: return 'February';
+      case 3: return 'March';
+      case 4: return 'April';
+      case 5: return 'May';
+      case 6: return 'June';
+      case 7: return 'July';
+      case 8: return 'August';
+      case 9: return 'September';
+      case 10: return 'October';
+      case 11: return 'November';
+      case 12: return 'December';
+      default: return '';
     }
   }
 }
@@ -561,11 +554,7 @@ class NeumorphicCheckInButton extends StatelessWidget {
   final bool isCheckedIn;
   final VoidCallback onTap;
 
-  const NeumorphicCheckInButton({
-    super.key,
-    required this.isCheckedIn,
-    required this.onTap,
-  });
+  const NeumorphicCheckInButton({super.key, required this.isCheckedIn, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -574,7 +563,6 @@ class NeumorphicCheckInButton extends StatelessWidget {
       child: Stack(
         alignment: Alignment.center,
         children: [
-          // Outer gradient ring
           Container(
             width: 220,
             height: 220,
@@ -590,16 +578,9 @@ class NeumorphicCheckInButton extends StatelessWidget {
                 ],
                 stops: const [0.0, 0.7, 1.0],
               ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.grey.withOpacity(0.1),
-                  blurRadius: 20,
-                  spreadRadius: 5,
-                ),
-              ],
+              boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.1), blurRadius: 20, spreadRadius: 5)],
             ),
           ),
-          // Inner neumorphic button
           Container(
             width: 200,
             height: 200,
@@ -608,22 +589,11 @@ class NeumorphicCheckInButton extends StatelessWidget {
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [
-                  Colors.grey[100]!,
-                  Colors.grey[200]!,
-                ],
+                colors: [Colors.grey[100]!, Colors.grey[200]!],
               ),
               boxShadow: [
-                BoxShadow(
-                  color: Colors.grey[400]!.withOpacity(0.4),
-                  offset: const Offset(5, 5),
-                  blurRadius: 15,
-                ),
-                BoxShadow(
-                  color: Colors.white.withOpacity(0.7),
-                  offset: const Offset(-5, -5),
-                  blurRadius: 15,
-                ),
+                BoxShadow(color: Colors.grey[400]!.withOpacity(0.4), offset: const Offset(5, 5), blurRadius: 15),
+                BoxShadow(color: Colors.white.withOpacity(0.7), offset: const Offset(-5, -5), blurRadius: 15),
               ],
             ),
             child: Center(
@@ -631,12 +601,10 @@ class NeumorphicCheckInButton extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Lottie.asset(
-                    isCheckedIn
-                        ? 'assets/animations/check_out.json'
-                        : 'assets/animations/check_in1.json',
+                    isCheckedIn ? 'assets/animations/check_out.json' : 'assets/animations/check_in1.json',
                     width: 150,
                     height: 150,
-                    repeat: true,
+                    repeat: false,
                   ),
                   Text(
                     isCheckedIn ? 'CHECK OUT' : 'CHECK IN',
@@ -651,30 +619,19 @@ class NeumorphicCheckInButton extends StatelessWidget {
               ),
             ),
           ),
-          // Subtle animated pulse effect
           AnimatedContainer(
             duration: const Duration(milliseconds: 1500),
             width: 220,
             height: 220,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              border: Border.all(
-                color: isCheckedIn
-                    ? Colors.red.withOpacity(0.2)
-                    : Colors.green.withOpacity(0.2),
-                width: 2,
-              ),
+              border: Border.all(color: isCheckedIn ? Colors.red.withOpacity(0.2) : Colors.green.withOpacity(0.2), width: 2),
             ),
             child: Container(
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
-                  colors: [
-                    isCheckedIn
-                        ? Colors.red.withOpacity(0.1)
-                        : Colors.green.withOpacity(0.1),
-                    Colors.transparent,
-                  ],
+                  colors: [isCheckedIn ? Colors.red.withOpacity(0.1) : Colors.green.withOpacity(0.1), Colors.transparent],
                   radius: 0.8,
                 ),
               ),

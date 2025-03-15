@@ -39,7 +39,7 @@ class MyApp extends StatelessWidget {
             );
           }
           if (snapshot.hasData && snapshot.data != null) {
-            return  AttendanceScreen();
+            return  HomeScreen();
           } else {
             return  HomeScreen();
           }

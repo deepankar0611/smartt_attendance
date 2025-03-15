@@ -30,10 +30,9 @@ dependencies:
   geocoding:
   flutter_swiper_null_safety:
   shimmer:
-  google_fonts:
   fl_chart:
   animate_do: ^3.0.2
-  image_picker:
+
   flutter_svg:
   animated_icon: ^0.0.8
   flutter_staggered_animations:

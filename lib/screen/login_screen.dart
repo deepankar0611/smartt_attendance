@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:smartt_attendance/screen/Sign%20Up.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
+import '../bottom_navigation_bar.dart';
 import '../student/homepage.dart';
 
 enum UserType { student, teacher }
@@ -228,7 +229,7 @@ class _LoginScreenState extends State<LoginScreen>
                         onPressed: () {
                           Navigator.push(
                             context,
-                            MaterialPageRoute(builder: (context) => const TeacherDashboard()),
+                            MaterialPageRoute(builder: (context) => const HomeScreen()),
                           );
                         },
                         child: const Text(

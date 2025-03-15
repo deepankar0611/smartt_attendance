@@ -53,10 +53,7 @@ class _LocationBottomSheetState extends State<LocationBottomSheet> {
         return;
       }
 
-      Position position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
-
+      Position position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
       setState(() => _currentPosition = position);
       await _getAddressFromLatLng(position);
     } catch (e) {
@@ -66,16 +63,11 @@ class _LocationBottomSheetState extends State<LocationBottomSheet> {
 
   Future<void> _getAddressFromLatLng(Position position) async {
     try {
-      List<Placemark> placemarks = await placemarkFromCoordinates(
-        position.latitude,
-        position.longitude,
-      );
-
+      List<Placemark> placemarks = await placemarkFromCoordinates(position.latitude, position.longitude);
       if (placemarks.isNotEmpty) {
         Placemark place = placemarks[0];
         setState(() {
-          _currentAddress =
-          "${place.street}, ${place.locality}, ${place.postalCode}, ${place.country}";
+          _currentAddress = "${place.street}, ${place.locality}, ${place.postalCode}, ${place.country}";
         });
       }
     } catch (e) {
@@ -164,38 +156,24 @@ class _LocationBottomSheetState extends State<LocationBottomSheet> {
           child: Container(
             width: double.infinity,
             height: 60,
-            decoration: BoxDecoration(
-              color: baseColor,
-              borderRadius: BorderRadius.circular(30),
-            ),
+            decoration: BoxDecoration(color: baseColor, borderRadius: BorderRadius.circular(30)),
           ),
         )
             : Container(
           width: double.infinity,
           height: 60,
-          decoration: BoxDecoration(
-            color: baseColor,
-            borderRadius: BorderRadius.circular(30),
-          ),
+          decoration: BoxDecoration(color: baseColor, borderRadius: BorderRadius.circular(30)),
         ),
         Positioned(
           left: _dragPosition,
           child: GestureDetector(
-            onHorizontalDragUpdate: (details) =>
-                _onHorizontalDragUpdate(details, maxWidth),
+            onHorizontalDragUpdate: (details) => _onHorizontalDragUpdate(details, maxWidth),
             onHorizontalDragEnd: (details) => _onHorizontalDragEnd(maxWidth),
             child: Container(
               width: 50,
               height: 50,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                Icons.arrow_forward_ios,
-                color: Colors.black,
-                size: 20,
-              ),
+              decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+              child: Icon(Icons.arrow_forward_ios, color: Colors.black, size: 20),
             ),
           ),
         ),
@@ -205,11 +183,7 @@ class _LocationBottomSheetState extends State<LocationBottomSheet> {
               _isActionCompleted
                   ? (widget.isCheckIn ? 'Checked In!' : 'Checked Out!')
                   : (widget.isCheckIn ? 'Swipe to Check In' : 'Swipe to Check Out'),
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-              ),
+              style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold),
             ),
           ),
         ),
