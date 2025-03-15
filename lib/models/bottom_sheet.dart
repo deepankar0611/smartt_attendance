@@ -113,6 +113,7 @@ class _LocationBottomSheetState extends State<LocationBottomSheet> {
     double maxWidth = MediaQuery.of(context).size.width - 32 - 65;
 
     return Container(
+      color: Colors.grey[200],
       padding: const EdgeInsets.all(16.0),
       child: Column(
         mainAxisSize: MainAxisSize.min,

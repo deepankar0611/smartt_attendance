@@ -14,7 +14,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final List<Widget> _pages = [
     AttendanceScreen(),
     AttendanceHistoryScreen(),
-    ProfilePage1(),
+    ModernProfilePage(),
   ];
 
   void _onItemTapped(int index) {

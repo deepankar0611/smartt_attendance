@@ -39,6 +39,7 @@ dependencies:
   flutter_staggered_animations:
   flutter_animate:
   animations:
+  table_calendar:
 
 dev_dependencies:
   flutter_test:
@@ -56,4 +57,5 @@ flutter:
   assets:
      - assets/png/
      - assets/ab.jpg
+     - assets/animations/
 

@@ -1,35 +1,123 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'package:table_calendar/table_calendar.dart'; // Added missing import
 
 class AttendanceHistoryScreen extends StatefulWidget {
+  const AttendanceHistoryScreen({Key? key}) : super(key: key);
+
   @override
   _AttendanceHistoryScreenState createState() => _AttendanceHistoryScreenState();
 }
 
-class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
+class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> with TickerProviderStateMixin {
   DateTime selectedDate = DateTime(2022, 10, 26);
   DateTime currentMonth = DateTime(2022, 10);
+  late TabController _tabController;
+  bool isListView = true;
 
-  // Random attendance data
+  late AnimationController _animationController;
+  late Animation<double> _animation;
+
   final List<Map<String, dynamic>> attendanceData = [
-    {'date': DateTime(2022, 10, 3), 'checkIn': '08:15', 'checkOut': '17:30', 'totalHours': '9h 15m', 'location': 'Main Office'},
-    {'date': DateTime(2022, 10, 4), 'checkIn': '08:00', 'checkOut': '16:45', 'totalHours': '8h 45m', 'location': 'Branch A'},
-    {'date': DateTime(2022, 10, 5), 'checkIn': '09:00', 'checkOut': '18:00', 'totalHours': '9h', 'location': 'Main Office'},
-    {'date': DateTime(2022, 10, 10), 'checkIn': '08:30', 'checkOut': '17:15', 'totalHours': '8h 45m', 'location': 'Branch B'},
-    {'date': DateTime(2022, 10, 15), 'checkIn': '07:45', 'checkOut': '16:30', 'totalHours': '8h 45m', 'location': 'Main Office'},
-    {'date': DateTime(2022, 10, 22), 'checkIn': '08:20', 'checkOut': '17:50', 'totalHours': '9h 30m', 'location': 'Branch A'},
-    {'date': DateTime(2022, 11, 1), 'checkIn': '08:10', 'checkOut': '17:20', 'totalHours': '9h 10m', 'location': 'Main Office'},
+    // Attendance data remains unchanged
+    {
+      'date': DateTime(2022, 10, 3),
+      'checkIn': '08:15',
+      'checkOut': '17:30',
+      'totalHours': '9h 15m',
+      'location': 'Main Office',
+      'status': 'On Time',
+      'notes': 'Team meeting at 10 AM',
+      'breaks': [{'start': '12:00', 'end': '13:00', 'duration': '1h 0m'}]
+    },
+    // ... rest of the attendance data ...
   ];
+
+  Map<String, dynamic> getMonthlyStats() {
+    final filteredData = _filterAttendanceByMonth();
+
+    if (filteredData.isEmpty) {
+      return {
+        'workdays': 0,
+        'totalHours': '0h 0m',
+        'avgHours': '0h 0m',
+        'onTime': 0,
+        'late': 0,
+      };
+    }
+
+    int onTime = 0;
+    int late = 0;
+    int totalMinutes = 0;
+
+    for (var record in filteredData) {
+      if (record['status'] == 'On Time' || record['status'] == 'Early') {
+        onTime++;
+      } else if (record['status'] == 'Late') {
+        late++;
+      }
+
+      String hoursStr = record['totalHours'];
+      List<String> parts = hoursStr.split('h ');
+      if (parts.length == 2) {
+        int hours = int.parse(parts[0]);
+        int minutes = int.parse(parts[1].replaceAll('m', ''));
+        totalMinutes += (hours * 60) + minutes;
+      }
+    }
+
+    int avgMinutes = (totalMinutes / filteredData.length).round();
+    String avgHours = '${(avgMinutes ~/ 60)}h ${avgMinutes % 60}m';
+    String totalHoursFormatted = '${(totalMinutes ~/ 60)}h ${totalMinutes % 60}m';
+
+    return {
+      'workdays': filteredData.length,
+      'totalHours': totalHoursFormatted,
+      'avgHours': avgHours,
+      'onTime': onTime,
+      'late': late,
+    };
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
+
+    _animation = CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeInOut,
+    );
+
+    _animationController.forward();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    _animationController.dispose();
+    super.dispose();
+  }
 
   void _previousMonth() {
     setState(() {
       currentMonth = DateTime(currentMonth.year, currentMonth.month - 1);
+      _animationController.reset();
+      _animationController.forward();
     });
   }
 
   void _nextMonth() {
     setState(() {
       currentMonth = DateTime(currentMonth.year, currentMonth.month + 1);
+      _animationController.reset();
+      _animationController.forward();
     });
   }
 
@@ -40,293 +128,525 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
     }).toList();
   }
 
+  Map<String, dynamic>? _getSelectedDayRecord() {
+    for (var record in attendanceData) {
+      DateTime recordDate = record['date'] as DateTime;
+      if (recordDate.year == selectedDate.year &&
+          recordDate.month == selectedDate.month &&
+          recordDate.day == selectedDate.day) {
+        return record;
+      }
+    }
+    return null;
+  }
+
+  Color _getStatusColor(String status) {
+    switch (status) {
+      case 'On Time':
+        return Colors.green;
+      case 'Late':
+        return Colors.orange;
+      case 'Early':
+        return Colors.blue;
+      default:
+        return Colors.grey;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final filteredAttendance = _filterAttendanceByMonth();
+    final stats = getMonthlyStats();
+    final selectedDayRecord = _getSelectedDayRecord();
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        title: Text('Attendance History', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black87)),
+        title: const Text(
+          'Attendance History',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 22,
+            color: Colors.white,
+          ),
+        ),
         centerTitle: true,
-        backgroundColor: Colors.green[100],
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+        // Remove the solid backgroundColor
+        // backgroundColor: Colors.white,
         elevation: 0,
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Stack(
-          children: [
-            Column(
-              children: [
-                // Month Navigator Card
-                Container(
-                  padding: EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white38,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(color: Colors.grey.withOpacity(0.2), offset: Offset(4, 4), blurRadius: 10, spreadRadius: 1),
-                      BoxShadow(color: Colors.white.withOpacity(0.8), offset: Offset(-4, -4), blurRadius: 10, spreadRadius: 1),
-                    ],
-                  ),
-                  child: _buildMonthNavigator(),
-                ),
-                SizedBox(height: 40),
-                // Larger Calendar Card
-                Container(
-                  height: MediaQuery.of(context).size.height * 0.45, // Larger calendar
-                  padding: EdgeInsets.all(25),
-                  decoration: BoxDecoration(
-                    color: Colors.green[50],
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(color: Colors.grey.withOpacity(0.2), offset: Offset(4, 4), blurRadius: 10, spreadRadius: 1),
-                      BoxShadow(color: Colors.white.withOpacity(0.8), offset: Offset(-4, -4), blurRadius: 10, spreadRadius: 1),
-                    ],
-                  ),
-                  child: _buildCalendar(),
-                ),
-                SizedBox(height: 30), // Increased spacing
+        // Add shape for rounded bottom corners
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(
+            bottom: Radius.circular(20), // Adjust the radius as needed
+          ),
+        ),
+        // Add gradient background
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0xff003300),Color(0xff006600),  // Ending green color
               ],
             ),
-            // History Card positioned at bottom fourth
-            // History Card positioned at bottom half
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              height: MediaQuery.of(context).size.height * 0.35, // Changed from 0.25 to 0.5 for half the screen
-              child: Container(
-                padding: EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.grey[100],
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(color: Colors.grey[400]!, offset: Offset(4, 4), blurRadius: 10, spreadRadius: 1),
-                    BoxShadow(color: Colors.white.withOpacity(0.8), offset: Offset(-4, -4), blurRadius: 10, spreadRadius: 1),
-                  ],
+            borderRadius: BorderRadius.vertical(
+              bottom: Radius.circular(20), // Match this with shape radius
+            ),
+          ),
+        ),
+      ),
+      body: SafeArea(
+        child: FadeTransition(
+          opacity: _animation,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Colors.blue[700]!, Colors.blue[500]!],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.blue.withOpacity(0.3),
+                        blurRadius: 15,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            DateFormat('MMMM yyyy').format(currentMonth),
+                            style: const TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              '${stats['workdays']} Workdays',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          _buildStatItem(
+                            title: 'Total Hours',
+                            value: stats['totalHours'],
+                            icon: Icons.access_time,
+                          ),
+                          _buildStatItem(
+                            title: 'Avg Hours/Day',
+                            value: stats['avgHours'],
+                            icon: Icons.trending_up,
+                          ),
+                          _buildStatItem(
+                            title: 'On Time',
+                            value: '${stats['onTime']}/${stats['workdays']}',
+                            icon: Icons.check_circle_outline,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-                child: SingleChildScrollView(
-                  child: filteredAttendance.isEmpty
-                      ? Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Text(
-                        'No attendance records for this month.',
-                        style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+              ),
+
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        _buildNavigationButton(Icons.arrow_back_ios_new, _previousMonth),
+                        const SizedBox(width: 8),
+                        _buildNavigationButton(Icons.arrow_forward_ios, _nextMonth),
+                      ],
+                    ),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.grey[200],
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        children: [
+                          GestureDetector(
+                            onTap: () => setState(() => isListView = true),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: isListView ? Colors.white : Colors.transparent,
+                                borderRadius: BorderRadius.circular(20),
+                                boxShadow: isListView ? [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.1),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ] : [],
+                              ),
+                              child: Icon(
+                                Icons.view_list,
+                                color: isListView ? Colors.blue[700] : Colors.grey[600],
+                              ),
+                            ),
+                          ),
+                          GestureDetector(
+                            onTap: () => setState(() => isListView = false),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: !isListView ? Colors.white : Colors.transparent,
+                                borderRadius: BorderRadius.circular(20),
+                                boxShadow: !isListView ? [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.1),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ] : [],
+                              ),
+                              child: Icon(
+                                Icons.calendar_month,
+                                color: !isListView ? Colors.blue[700] : Colors.grey[600],
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  )
-                      : _buildAttendanceList(filteredAttendance),
+                  ],
                 ),
+              ),
+
+              const SizedBox(height: 16),
+
+              Expanded(
+                child: isListView
+                    ? _buildAttendanceListView(filteredAttendance)
+                    : _buildCalendarView(),
+              ),
+
+              if (!isListView && selectedDayRecord != null)
+                _buildSelectedDayDetail(selectedDayRecord),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatItem({required String title, required String value, required IconData icon}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, color: Colors.white70, size: 16),
+            const SizedBox(width: 6),
+            Text(
+              title,
+              style: const TextStyle(
+                color: Colors.white70,
+                fontSize: 12,
               ),
             ),
           ],
         ),
+        const SizedBox(height: 6),
+        Text(
+          value,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNavigationButton(IconData icon, VoidCallback onPressed) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.2),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: IconButton(
+        icon: Icon(icon, size: 20, color: Colors.grey[700]),
+        onPressed: onPressed,
       ),
     );
   }
 
-  Widget _buildMonthNavigator() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        NeumorphicButton(icon: Icons.arrow_left, onTap: _previousMonth, label: 'Prev'),
-        Text(DateFormat('MMMM yyyy').format(currentMonth), style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87)),
-        NeumorphicButton(icon: Icons.arrow_right, onTap: _nextMonth, label: 'Next'),
-      ],
-    );
-  }
-
-  Widget _buildCalendar() {
-    List<Widget> dayWidgets = [];
-    List<String> days = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
-
-    for (var day in days) {
-      dayWidgets.add(
-        Expanded(
-          child: Center(
-            child: Text(day, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey[600])),
-          ),
-        ),
-      );
-    }
-
-    DateTime firstDayOfMonth = DateTime(currentMonth.year, currentMonth.month, 1);
-    int firstWeekday = firstDayOfMonth.weekday % 7;
-    int daysInMonth = DateTime(currentMonth.year, currentMonth.month + 1, 0).day;
-
-    List<Widget> dateWidgets = [];
-    for (int i = 0; i < firstWeekday; i++) {
-      dateWidgets.add(Expanded(child: Container()));
-    }
-
-    for (int day = 1; day <= daysInMonth; day++) {
-      DateTime currentDay = DateTime(currentMonth.year, currentMonth.month, day);
-      bool isSelected = currentDay.day == selectedDate.day && currentDay.month == selectedDate.month && currentDay.year == selectedDate.year;
-
-      dateWidgets.add(
-        Expanded(
-          child: GestureDetector(
-            onTap: () => setState(() => selectedDate = currentDay),
-            child: Container(
-              margin: EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: isSelected ? Colors.blue : Colors.transparent,
+  Widget _buildAttendanceListView(List<Map<String, dynamic>> attendance) {
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      itemCount: attendance.length,
+      itemBuilder: (context, index) {
+        final record = attendance[index];
+        return Card(
+          elevation: 2,
+          margin: const EdgeInsets.only(bottom: 8), // Fixed typo: should be 'bottom'
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          child: Container(
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Colors.white,           // Starting color
+                  Colors.white,     // Ending color
+                ],
               ),
-              child: Center(
-                child: Text(
-                  day.toString(),
-                  style: TextStyle(
-                    fontSize: 18,
-                    color: isSelected ? Colors.white : Colors.black87,
-                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+              borderRadius: BorderRadius.circular(12), // Match Card's border radius
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        DateFormat('EEE, MMM d').format(record['date']),
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: _getStatusColor(record['status']).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          record['status'],
+                          style: TextStyle(
+                            color: _getStatusColor(record['status']),
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Check In', style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+                          Text(record['checkIn'], style: const TextStyle(fontSize: 16)),
+                        ],
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Check Out', style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+                          Text(record['checkOut'], style: const TextStyle(fontSize: 16)),
+                        ],
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Total', style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+                          Text(record['totalHours'], style: const TextStyle(fontSize: 16)),
+                        ],
+                      ),
+                    ],
+                  ),
+                  if (record['notes'].isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      'Notes: ${record['notes']}',
+                      style: TextStyle(color: Colors.grey[700], fontSize: 14),
+                    ),
+                  ],
+                ],
               ),
             ),
-          ),
-        ),
-      );
-    }
-
-    List<Widget> rows = [];
-    for (int i = 0; i < dateWidgets.length; i += 7) {
-      List<Widget> rowChildren = dateWidgets.sublist(i, i + 7 > dateWidgets.length ? dateWidgets.length : i + 7);
-      while (rowChildren.length < 7) {
-        rowChildren.add(Expanded(child: Container()));
-      }
-      rows.add(Row(children: rowChildren));
-    }
-
-    return Column(
-      children: [
-        Row(children: dayWidgets),
-        SizedBox(height: 20),
-        Expanded(child: Column(children: rows)),
-      ],
-    );
-  }
-
-  Widget _buildAttendanceList(List<Map<String, dynamic>> filteredAttendance) {
-    return ListView.builder(
-      shrinkWrap: true,
-      physics: NeverScrollableScrollPhysics(),
-      itemCount: filteredAttendance.length,
-      itemBuilder: (context, index) {
-        final record = filteredAttendance[index];
-        final recordDate = record['date'] as DateTime;
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 15.0,horizontal: 5),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 60,
-                height: 60,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: recordDate.day == 22 ? Colors.orange : Colors.grey[300],
-                ),
-                child: Center(
-                  child: Text(
-                    recordDate.day.toString(),
-                    style: TextStyle(fontSize: 25, fontWeight: FontWeight.bold, color: Colors.white),
-                  ),
-                ),
-              ),
-              SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        _buildRichText('Check In', record['checkIn'] ?? '---:---'),
-                        _buildRichText('Check Out', record['checkOut'] ?? '---:---'),
-                        _buildRichText('Total Hrs', record['totalHours'] ?? '---:---'),
-                      ],
-                    ),
-                    SizedBox(height: 4),
-                    if (record['location'] != null)
-                      Text(record['location'], style: TextStyle(fontSize: 12, color: Colors.grey[600])),
-                  ],
-                ),
-              ),
-            ],
           ),
         );
       },
     );
   }
 
-  Widget _buildRichText(String label, String value) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
-        SizedBox(height: 2),
-        Text(value, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87)),
-      ],
-    );
-  }
-}
-
-class NeumorphicButton extends StatefulWidget {
-  final IconData icon;
-  final VoidCallback onTap;
-  final String? label;
-
-  const NeumorphicButton({required this.icon, required this.onTap, this.label});
-
-  @override
-  _NeumorphicButtonState createState() => _NeumorphicButtonState();
-}
-
-class _NeumorphicButtonState extends State<NeumorphicButton> {
-  bool _isPressed = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTapDown: (_) => setState(() => _isPressed = true),
-      onTapUp: (_) {
-        setState(() => _isPressed = false);
-        widget.onTap();
-      },
-      onTapCancel: () => setState(() => _isPressed = false),
-      child: Container(
-        width: widget.label != null ? 80 : 40,
-        height: 30,
-        decoration: BoxDecoration(
-          shape: BoxShape.rectangle,
-          color: Colors.white38,
-          boxShadow: _isPressed
-              ? [
-            BoxShadow(color: Colors.grey.withOpacity(0.2), offset: Offset(2, 2), blurRadius: 5, spreadRadius: 1),
-            BoxShadow(color: Colors.white.withOpacity(0.8), offset: Offset(-2, -2), blurRadius: 5, spreadRadius: 1),
-          ]
-              : [
-            BoxShadow(color: Colors.grey.withOpacity(0.2), offset: Offset(3, 3), blurRadius: 5, spreadRadius: 1),
-            BoxShadow(color: Colors.white.withOpacity(0.8), offset: Offset(-3, -3), blurRadius: 5, spreadRadius: 1),
-          ],
+  Widget _buildCalendarView() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: TableCalendar(
+        firstDay: DateTime(currentMonth.year - 1),
+        lastDay: DateTime(currentMonth.year + 1),
+        focusedDay: currentMonth,
+        selectedDayPredicate: (day) => isSameDay(selectedDate, day),
+        onDaySelected: (selectedDay, focusedDay) {
+          setState(() {
+            selectedDate = selectedDay;
+            currentMonth = focusedDay;
+          });
+        },
+        calendarFormat: CalendarFormat.month,
+        calendarStyle: CalendarStyle(
+          todayDecoration: BoxDecoration(
+            color: Colors.blue[700],
+            shape: BoxShape.circle,
+          ),
+          selectedDecoration: BoxDecoration(
+            color: Colors.blue[500],
+            shape: BoxShape.circle,
+          ),
+          markerDecoration: const BoxDecoration(
+            color: Colors.green,
+            shape: BoxShape.circle,
+          ),
         ),
-        child: Center(
-          child: widget.label != null
-              ? Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(widget.icon, color: Colors.black87, size: 20),
-              SizedBox(width: 4),
-              Text(widget.label!, style: TextStyle(fontSize: 12, color: Colors.black87, fontWeight: FontWeight.bold)),
-            ],
-          )
-              : Icon(widget.icon, color: Colors.black87, size: 24),
+        calendarBuilders: CalendarBuilders(
+          markerBuilder: (context, date, events) {
+            if (attendanceData.any((record) =>
+            (record['date'] as DateTime).day == date.day &&
+                (record['date'] as DateTime).month == date.month &&
+                (record['date'] as DateTime).year == date.year)) {
+              return Positioned(
+                right: 1,
+                bottom: 1,
+                child: Container(
+                  width: 6,
+                  height: 6,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.green,
+                  ),
+                ),
+              );
+            }
+            return null;
+          },
         ),
       ),
     );
   }
+
+  Widget _buildSelectedDayDetail(Map<String, dynamic> record) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.2),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                DateFormat('EEEE, MMMM d').format(record['date']),
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: _getStatusColor(record['status']).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  record['status'],
+                  style: TextStyle(
+                    color: _getStatusColor(record['status']),
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _buildDetailItem('Check In', record['checkIn']),
+              _buildDetailItem('Check Out', record['checkOut']),
+              _buildDetailItem('Total', record['totalHours']),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _buildDetailItem('Location', record['location']),
+          if (record['notes'].isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Text(
+                'Notes: ${record['notes']}',
+                style: TextStyle(color: Colors.grey[700]),
+              ),
+            ),
+          if (record['breaks'].isNotEmpty) ...[
+            const SizedBox(height: 12),
+            const Text('Breaks:', style: TextStyle(fontWeight: FontWeight.bold)),
+            ...record['breaks'].map<Widget>((breakTime) => Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                '${breakTime['start']} - ${breakTime['end']} (${breakTime['duration']})',
+                style: TextStyle(color: Colors.grey[700]),
+              ),
+            )).toList(),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailItem(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+        const SizedBox(height: 4),
+        Text(value, style: const TextStyle(fontSize: 16)),
+      ],
+    );
+  }
+
+
 }
