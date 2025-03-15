@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:smartt_attendance/screen/attendance-screen.dart';
+import 'package:smartt_attendance/screen/history.dart';
+import 'package:smartt_attendance/screen/profile.dart';
 
 class HomeScreen extends StatefulWidget {
   @override
@@ -11,8 +13,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   final List<Widget> _pages = [
     AttendanceScreen(),
-    Center(child: Text("Home Screen", style: TextStyle(fontSize: 24))),
-    Center(child: Text("Profile Screen", style: TextStyle(fontSize: 24))),
+    AttendanceHistoryScreen(),
+    ProfilePage1(),
   ];
 
   void _onItemTapped(int index) {
@@ -24,19 +26,20 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       body: _pages[_selectedIndex], // Display the selected screen
       bottomNavigationBar: Container(
-        margin: EdgeInsets.all(25),
-        height: 80,
+        margin: EdgeInsets.all(15),
+        height: 70,
         decoration: BoxDecoration(
           color: Colors.green[900],
-          borderRadius: BorderRadius.circular(50),
+          borderRadius: BorderRadius.circular(30),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
-            _buildNavItem(Icons.home, "Home", 0),
-            _buildNavItem(Icons.calendar_month, "Attendance", 1),
+            _buildNavItem(Icons.home, "attendence", 0),
+            _buildNavItem(Icons.calendar_month, "history", 1),
             _buildNavItem(Icons.person, "Profile", 2),
           ],
         ),
