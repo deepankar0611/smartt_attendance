@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:smartt_attendance/screen/attendance-screen.dart';
 import 'package:smartt_attendance/screen/history.dart';
-import 'package:smartt_attendance/screen/profile.dart';
-
+import 'package:smartt_attendance/screen/profile%20page.dart';
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -14,10 +13,10 @@ class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
 
   // Use const where possible to avoid unnecessary rebuilds
-  final List<Widget> _pages = const [
-    AttendanceScreen(),
-    AttendanceHistoryScreen(userEmail: 'deepankarsingh1@gmail.com', attendanceData: [],), // Match with AttendanceScreen
-    ProfilePage1(),
+  final List<Widget> _pages = [
+    const AttendanceScreen(),
+    const AttendanceHistoryScreen(userEmail: 'deepankarsingh1@gmail.com', attendanceData: [],), // Match with AttendanceScreen
+    ModernProfilePage(),
   ];
 
   void _onItemTapped(int index) {

@@ -301,22 +301,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                         _buildAttendanceStats(),
                         const SizedBox(height: 20),
                         Center(
-                          child: ElevatedButton(
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => AttendanceHistoryScreen(userEmail: _userEmail, attendanceData: [],),
-                                ),
-                              );
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.blue[700],
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            ),
-                            child: const Text('View Attendance History'),
-                          ),
+
                         ),
                         const SizedBox(height: 20),
                       ],

@@ -35,9 +35,6 @@ dependencies:
 
   flutter_svg:
   animated_icon: ^0.0.8
-  flutter_staggered_animations:
-  flutter_animate:
-  animations:
   table_calendar:
 
 dev_dependencies:
@@ -57,4 +54,5 @@ flutter:
      - assets/png/
      - assets/ab.jpg
      - assets/animations/
+     - assets/
 

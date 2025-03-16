@@ -215,12 +215,12 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> with 
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
-                          colors: [Colors.blue[700]!, Colors.blue[500]!],
+                          colors: [Colors.white !, Colors.white!],
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                         ),
                         borderRadius: BorderRadius.circular(20),
-                        boxShadow: [BoxShadow(color: Colors.blue.withOpacity(0.3), blurRadius: 15, offset: const Offset(0, 8))],
+                        boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.3), blurRadius: 15, offset: const Offset(0, 8))],
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -230,17 +230,17 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> with 
                             children: [
                               Text(
                                 DateFormat('MMMM yyyy').format(currentMonth),
-                                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+                                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black),
                               ),
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.2),
+                                  color: Colors.black.withOpacity(0.2),
                                   borderRadius: BorderRadius.circular(20),
                                 ),
                                 child: Text(
                                   '${stats['workdays']} Workdays',
-                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                  style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
                                 ),
                               ),
                             ],
@@ -279,7 +279,7 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> with 
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                                   decoration: BoxDecoration(
-                                    color: isListView ? Colors.white : Colors.transparent,
+                                    color: isListView ? Colors.white38 : Colors.transparent,
                                     borderRadius: BorderRadius.circular(20),
                                     boxShadow: isListView
                                         ? [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 4, offset: const Offset(0, 2))]
@@ -330,13 +330,13 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> with 
       children: [
         Row(
           children: [
-            Icon(icon, color: Colors.white70, size: 16),
+            Icon(icon, color: Colors.black, size: 16),
             const SizedBox(width: 6),
-            Text(title, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+            Text(title, style: const TextStyle(color: Colors.black, fontSize: 12)),
           ],
         ),
         const SizedBox(height: 6),
-        Text(value, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+        Text(value, style: const TextStyle(color: Colors.black, fontSize: 18, fontWeight: FontWeight.bold)),
       ],
     );
   }
