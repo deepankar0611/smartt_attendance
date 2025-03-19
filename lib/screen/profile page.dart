@@ -330,7 +330,6 @@ class _ModernProfilePageState extends State<ModernProfilePage> {
       ),
     );
   }
-
   Widget _buildOptionsCard(Color baseColor) {
     return Column(
       children: [
