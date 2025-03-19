@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:ui';
-import 'package:lottie/lottie.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geolocator/geolocator.dart';
 import '../models/bottom_sheet.dart';
@@ -300,9 +299,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                         const SizedBox(height: 40),
                         _buildAttendanceStats(),
                         const SizedBox(height: 20),
-                        Center(
-
-                        ),
+                        Center(),
                         const SizedBox(height: 20),
                       ],
                     ),
@@ -326,7 +323,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Hey Aryan!',
+                'Hey Deepankar!',
                 style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.grey[800], letterSpacing: -0.5),
               ),
               const SizedBox(height: 4),
@@ -535,94 +532,107 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
   }
 }
 
-class NeumorphicCheckInButton extends StatelessWidget {
+class NeumorphicCheckInButton extends StatefulWidget {
   final bool isCheckedIn;
   final VoidCallback onTap;
 
-  const NeumorphicCheckInButton({super.key, required this.isCheckedIn, required this.onTap});
+  const NeumorphicCheckInButton({
+    super.key,
+    required this.isCheckedIn,
+    required this.onTap,
+  });
+
+  @override
+  _NeumorphicCheckInButtonState createState() => _NeumorphicCheckInButtonState();
+}
+
+class _NeumorphicCheckInButtonState extends State<NeumorphicCheckInButton> {
+  bool _isPressed = false;
 
   @override
   Widget build(BuildContext context) {
+    Color buttonColor = widget.isCheckedIn ? Colors.red : Colors.green;
+    String buttonText = widget.isCheckedIn ? "Check Out" : "Check In";
+
     return GestureDetector(
-      onTap: onTap,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Container(
-            width: 220,
-            height: 220,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  isCheckedIn ? Colors.red.shade300 : Colors.grey.shade300,
-                  isCheckedIn ? Colors.red.shade100 : Colors.grey.shade100,
-                  Colors.grey,
+      onTapDown: (_) => setState(() => _isPressed = true),
+      onTapUp: (_) {
+        print("Button tapped: ${widget.isCheckedIn ? 'Check Out' : 'Check In'}");
+        setState(() => _isPressed = false);
+        widget.onTap();
+      },
+      onTapCancel: () => setState(() => _isPressed = false),
+      child: Container(
+        width: 200,
+        height: 200,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Container(
+              width: 200,
+              height: 200,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.grey[200],
+                boxShadow: [
+                  BoxShadow(
+                    color: _isPressed
+                        ? Colors.grey[400]!
+                        : Colors.white.withOpacity(0.8),
+                    offset: _isPressed ? Offset(5, 5) : Offset(-5, -5),
+                    blurRadius: 15,
+                    spreadRadius: 1,
+                  ),
+                  BoxShadow(
+                    color: _isPressed
+                        ? Colors.white.withOpacity(0.8)
+                        : Colors.grey[400]!,
+                    offset: _isPressed ? Offset(-5, -5) : Offset(5, 5),
+                    blurRadius: 15,
+                    spreadRadius: 1,
+                  ),
                 ],
-                stops: const [0.0, 0.7, 1.0],
               ),
-              boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.1), blurRadius: 20, spreadRadius: 5)],
             ),
-          ),
-          Container(
-            width: 200,
-            height: 200,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Colors.grey[100]!, Colors.grey[200]!],
+            Container(
+              width: 180,
+              height: 180,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.grey[300],
+                boxShadow: [
+                  BoxShadow(
+                    color: _isPressed
+                        ? Colors.white.withOpacity(0.7)
+                        : Colors.grey[500]!,
+                    offset: _isPressed ? Offset(-5, -5) : Offset(5, 5),
+                    blurRadius: 10,
+                    spreadRadius: -2,
+                  ),
+                  BoxShadow(
+                    color: _isPressed
+                        ? Colors.grey[500]!
+                        : Colors.white.withOpacity(0.7),
+                    offset: _isPressed ? Offset(5, 5) : Offset(-5, -5),
+                    blurRadius: 10,
+                    spreadRadius: -2,
+                  ),
+                ],
               ),
-              boxShadow: [
-                BoxShadow(color: Colors.grey[400]!.withOpacity(0.4), offset: const Offset(5, 5), blurRadius: 15),
-                BoxShadow(color: Colors.white.withOpacity(0.7), offset: const Offset(-5, -5), blurRadius: 15),
-              ],
-            ),
-            child: Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Lottie.asset(
-                    isCheckedIn ? 'assets/animations/check_out.json' : 'assets/animations/check_in1.json',
-                    width: 150,
-                    height: 150,
-                    repeat: false,
-                  ),
+                  Icon(Icons.touch_app, size: 40, color: buttonColor),
+                  SizedBox(height: 10),
                   Text(
-                    isCheckedIn ? 'CHECK OUT' : 'CHECK IN',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      color: isCheckedIn ? Colors.red[700] : Colors.grey[700],
-                      letterSpacing: 1.5,
-                    ),
+                    buttonText,
+                    style: TextStyle(fontSize: 20, color: buttonColor),
                   ),
                 ],
               ),
             ),
-          ),
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 1500),
-            width: 220,
-            height: 220,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: isCheckedIn ? Colors.red.withOpacity(0.2) : Colors.grey.withOpacity(0.2), width: 2),
-            ),
-            child: Container(
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [isCheckedIn ? Colors.red.withOpacity(0.1) : Colors.green.withOpacity(0.1), Colors.transparent],
-                  radius: 0.8,
-                ),
-              ),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

@@ -3,23 +3,34 @@ import 'package:intl/intl.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geocoding/geocoding.dart';
+import 'package:provider/provider.dart';
 
-class AttendanceHistoryScreen extends StatefulWidget {
+import '../provider/attendance_history_notifier.dart';
+class AttendanceHistoryScreen extends StatelessWidget {
   final String userEmail;
-  const AttendanceHistoryScreen({Key? key,
-    required this.userEmail,
-    required List attendanceData}) : super(key: key);
+  const AttendanceHistoryScreen({Key? key, required this.userEmail, required List attendanceData}) : super(key: key);
 
   @override
-  _AttendanceHistoryScreenState createState() => _AttendanceHistoryScreenState();
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider(
+      create: (_) => AttendanceHistoryNotifier(),
+      child: _AttendanceHistoryView(userEmail: userEmail),
+    );
+  }
 }
 
-class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> with TickerProviderStateMixin {
-  DateTime selectedDate = DateTime.now();
-  DateTime currentMonth = DateTime(DateTime.now().year, DateTime.now().month);
-  bool isListView = true;
+class _AttendanceHistoryView extends StatefulWidget {
+  final String userEmail;
+  const _AttendanceHistoryView({required this.userEmail});
+
+  @override
+  _AttendanceHistoryViewState createState() => _AttendanceHistoryViewState();
+}
+
+class _AttendanceHistoryViewState extends State<_AttendanceHistoryView> with TickerProviderStateMixin {
   late AnimationController _animationController;
   late Animation<double> _animation;
+  late Future<List<Map<String, dynamic>>> _attendanceFuture;
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
@@ -29,6 +40,7 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> with 
     _animationController = AnimationController(vsync: this, duration: const Duration(milliseconds: 600));
     _animation = CurvedAnimation(parent: _animationController, curve: Curves.easeInOut);
     _animationController.forward();
+    _attendanceFuture = _fetchAttendanceByMonth(DateTime.now()); // Initial fetch
   }
 
   @override
@@ -37,31 +49,15 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> with 
     super.dispose();
   }
 
-  void _previousMonth() {
-    setState(() {
-      currentMonth = DateTime(currentMonth.year, currentMonth.month - 1);
-      _animationController.reset();
-      _animationController.forward();
-    });
-  }
-
-  void _nextMonth() {
-    setState(() {
-      currentMonth = DateTime(currentMonth.year, currentMonth.month + 1);
-      _animationController.reset();
-      _animationController.forward();
-    });
-  }
-
-  Future<List<Map<String, dynamic>>> _fetchAttendanceByMonth() async {
+  Future<List<Map<String, dynamic>>> _fetchAttendanceByMonth(DateTime month) async {
     try {
-      print('Fetching attendance for user: ${widget.userEmail}, month: ${DateFormat('MMMM yyyy').format(currentMonth)}');
+      print('Fetching attendance for user: ${widget.userEmail}, month: ${DateFormat('MMMM yyyy').format(month)}');
       final snapshot = await _firestore
           .collection('users')
           .doc(widget.userEmail)
           .collection('attendance')
-          .where('date', isGreaterThanOrEqualTo: DateTime(currentMonth.year, currentMonth.month, 1))
-          .where('date', isLessThan: DateTime(currentMonth.year, currentMonth.month + 1, 1))
+          .where('date', isGreaterThanOrEqualTo: DateTime(month.year, month.month, 1))
+          .where('date', isLessThan: DateTime(month.year, month.month + 1, 1))
           .get();
       final data = snapshot.docs.map((doc) => doc.data() as Map<String, dynamic>).toList();
       print('Fetched ${data.length} records');
@@ -72,12 +68,10 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> with 
     }
   }
 
-  Map<String, dynamic>? _getSelectedDayRecord(List<Map<String, dynamic>> attendance) {
+  Map<String, dynamic>? _getSelectedDayRecord(List<Map<String, dynamic>> attendance, DateTime selectedDate) {
     for (var record in attendance) {
       DateTime recordDate = (record['date'] as Timestamp).toDate();
-      if (recordDate.year == selectedDate.year &&
-          recordDate.month == selectedDate.month &&
-          recordDate.day == selectedDate.day) {
+      if (isSameDay(recordDate, selectedDate)) {
         return record;
       }
     }
@@ -141,13 +135,11 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> with 
     }
   }
 
-  // Function to convert latitude and longitude to a place name (first part only)
   Future<String> getPlaceName(double latitude, double longitude) async {
     try {
       List<Placemark> placemarks = await placemarkFromCoordinates(latitude, longitude);
       if (placemarks.isNotEmpty) {
         Placemark place = placemarks.first;
-        // Return the first non-empty field (e.g., street or name)
         String? placeName = [
           place.street,
           place.name,
@@ -164,6 +156,8 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> with 
 
   @override
   Widget build(BuildContext context) {
+    final notifier = Provider.of<AttendanceHistoryNotifier>(context);
+
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
@@ -182,143 +176,176 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> with 
         ),
       ),
       body: SafeArea(
-        child: FutureBuilder<List<Map<String, dynamic>>>(
-          future: _fetchAttendanceByMonth(),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            if (snapshot.hasError) {
-              return Center(child: Text('Error: ${snapshot.error}'));
-            }
-            final filteredAttendance = snapshot.data ?? [];
-            final stats = getMonthlyStats(filteredAttendance);
-            final selectedDayRecord = _getSelectedDayRecord(filteredAttendance);
+        child: SingleChildScrollView(
+          child: FutureBuilder<List<Map<String, dynamic>>>(
+            future: _attendanceFuture,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (snapshot.hasError) {
+                return Center(child: Text('Error: ${snapshot.error}'));
+              }
+              final filteredAttendance = snapshot.data ?? [];
+              final stats = getMonthlyStats(filteredAttendance);
 
-            if (filteredAttendance.isEmpty) {
-              return Center(
-                child: Text(
-                  'No attendance data for ${DateFormat('MMMM yyyy').format(currentMonth)}',
-                  style: TextStyle(fontSize: 18, color: Colors.grey[600]),
-                ),
-              );
-            }
+              if (filteredAttendance.isEmpty) {
+                return Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Center(
+                    child: Text(
+                      'No attendance data for ${DateFormat('MMMM yyyy').format(notifier.currentMonth)}',
+                      style: TextStyle(fontSize: 18, color: Colors.grey[600]),
+                    ),
+                  ),
+                );
+              }
 
-            return FadeTransition(
-              opacity: _animation,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [Colors.white !, Colors.white!],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
+              return FadeTransition(
+                opacity: _animation,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [Colors.white, Colors.white],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.3), blurRadius: 15, offset: const Offset(0, 8))],
                         ),
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.3), blurRadius: 15, offset: const Offset(0, 8))],
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  DateFormat('MMMM yyyy').format(notifier.currentMonth),
+                                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Text(
+                                    '${stats['workdays']} Workdays',
+                                    style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 20),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                _buildStatItem(title: 'Total Hours', value: stats['totalHours'], icon: Icons.access_time),
+                                _buildStatItem(title: 'Avg Hours/Day', value: stats['avgHours'], icon: Icons.trending_up),
+                                _buildStatItem(title: 'On Time', value: '${stats['onTime']}/${stats['workdays']}', icon: Icons.check_circle_outline),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text(
-                                DateFormat('MMMM yyyy').format(currentMonth),
-                                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black),
-                              ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                decoration: BoxDecoration(
-                                  color: Colors.black.withOpacity(0.2),
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                child: Text(
-                                  '${stats['workdays']} Workdays',
-                                  style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
-                                ),
-                              ),
+                              _buildNavigationButton(Icons.arrow_back_ios_new, () {
+                                notifier.previousMonth();
+                                _animationController.reset();
+                                _animationController.forward();
+                                setState(() {
+                                  _attendanceFuture = _fetchAttendanceByMonth(notifier.currentMonth);
+                                });
+                              }),
+                              const SizedBox(width: 8),
+                              _buildNavigationButton(Icons.arrow_forward_ios, () {
+                                notifier.nextMonth();
+                                _animationController.reset();
+                                _animationController.forward();
+                                setState(() {
+                                  _attendanceFuture = _fetchAttendanceByMonth(notifier.currentMonth);
+                                });
+                              }),
                             ],
                           ),
-                          const SizedBox(height: 20),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              _buildStatItem(title: 'Total Hours', value: stats['totalHours'], icon: Icons.access_time),
-                              _buildStatItem(title: 'Avg Hours/Day', value: stats['avgHours'], icon: Icons.trending_up),
-                              _buildStatItem(title: 'On Time', value: '${stats['onTime']}/${stats['workdays']}', icon: Icons.check_circle_outline),
-                            ],
+                          Container(
+                            decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(20)),
+                            child: Row(
+                              children: [
+                                GestureDetector(
+                                  onTap: () => notifier.toggleListView(true),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                    decoration: BoxDecoration(
+                                      color: notifier.isListView ? Colors.white38 : Colors.transparent,
+                                      borderRadius: BorderRadius.circular(20),
+                                      boxShadow: notifier.isListView
+                                          ? [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 4, offset: const Offset(0, 2))]
+                                          : [],
+                                    ),
+                                    child: Icon(Icons.view_list, color: notifier.isListView ? Colors.blue[700] : Colors.grey[600]),
+                                  ),
+                                ),
+                                GestureDetector(
+                                  onTap: () => notifier.toggleListView(false),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                    decoration: BoxDecoration(
+                                      color: !notifier.isListView ? Colors.white : Colors.transparent,
+                                      borderRadius: BorderRadius.circular(20),
+                                      boxShadow: !notifier.isListView
+                                          ? [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 4, offset: const Offset(0, 2))]
+                                          : [],
+                                    ),
+                                    child: Icon(Icons.calendar_month, color: !notifier.isListView ? Colors.blue[700] : Colors.grey[600]),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ],
                       ),
                     ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    const SizedBox(height: 16),
+                    notifier.isListView
+                        ? _buildAttendanceListView(filteredAttendance)
+                        : Column(
                       children: [
-                        Row(
-                          children: [
-                            _buildNavigationButton(Icons.arrow_back_ios_new, _previousMonth),
-                            const SizedBox(width: 8),
-                            _buildNavigationButton(Icons.arrow_forward_ios, _nextMonth),
-                          ],
-                        ),
-                        Container(
-                          decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(20)),
-                          child: Row(
-                            children: [
-                              GestureDetector(
-                                onTap: () => setState(() => isListView = true),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                                  decoration: BoxDecoration(
-                                    color: isListView ? Colors.white38 : Colors.transparent,
-                                    borderRadius: BorderRadius.circular(20),
-                                    boxShadow: isListView
-                                        ? [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 4, offset: const Offset(0, 2))]
-                                        : [],
-                                  ),
-                                  child: Icon(Icons.view_list, color: isListView ? Colors.blue[700] : Colors.grey[600]),
-                                ),
+                        _buildCalendarView(filteredAttendance, notifier),
+                        Consumer<AttendanceHistoryNotifier>(
+                          builder: (context, notifier, child) {
+                            final selectedDayRecord = _getSelectedDayRecord(filteredAttendance, notifier.selectedDate);
+                            return selectedDayRecord != null
+                                ? _buildSelectedDayDetail(selectedDayRecord)
+                                : Padding(
+                              padding: const EdgeInsets.all(16.0),
+                              child: Text(
+                                'No attendance data for ${DateFormat('MMMM d, yyyy').format(notifier.selectedDate)}',
+                                style: TextStyle(fontSize: 16, color: Colors.grey[600]),
                               ),
-                              GestureDetector(
-                                onTap: () => setState(() => isListView = false),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                                  decoration: BoxDecoration(
-                                    color: !isListView ? Colors.white : Colors.transparent,
-                                    borderRadius: BorderRadius.circular(20),
-                                    boxShadow: !isListView
-                                        ? [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 4, offset: const Offset(0, 2))]
-                                        : [],
-                                  ),
-                                  child: Icon(Icons.calendar_month, color: !isListView ? Colors.blue[700] : Colors.grey[600]),
-                                ),
-                              ),
-                            ],
-                          ),
+                            );
+                          },
                         ),
                       ],
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  Expanded(
-                    child: isListView
-                        ? _buildAttendanceListView(filteredAttendance)
-                        : _buildCalendarView(filteredAttendance),
-                  ),
-                  if (!isListView && selectedDayRecord != null) _buildSelectedDayDetail(selectedDayRecord),
-                ],
-              ),
-            );
-          },
+                  ],
+                ),
+              );
+            },
+          ),
         ),
       ),
     );
@@ -354,6 +381,8 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> with 
 
   Widget _buildAttendanceListView(List<Map<String, dynamic>> attendance) {
     return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
       padding: const EdgeInsets.symmetric(horizontal: 16),
       itemCount: attendance.length,
       itemBuilder: (context, index) {
@@ -486,48 +515,40 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> with 
     );
   }
 
-  Widget _buildCalendarView(List<Map<String, dynamic>> attendance) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: TableCalendar(
-        firstDay: DateTime(currentMonth.year - 1),
-        lastDay: DateTime(currentMonth.year + 1),
-        focusedDay: currentMonth,
-        selectedDayPredicate: (day) => isSameDay(selectedDate, day),
-        onDaySelected: (selectedDay, focusedDay) {
-          setState(() {
-            selectedDate = selectedDay;
-            currentMonth = focusedDay;
+  Widget _buildCalendarView(List<Map<String, dynamic>> attendance, AttendanceHistoryNotifier notifier) {
+    return TableCalendar(
+      firstDay: DateTime(notifier.currentMonth.year - 1),
+      lastDay: DateTime(notifier.currentMonth.year + 1),
+      focusedDay: notifier.currentMonth,
+      selectedDayPredicate: (day) => isSameDay(notifier.selectedDate, day),
+      onDaySelected: (selectedDay, focusedDay) {
+        notifier.selectDate(selectedDay, focusedDay);
+      },
+      calendarFormat: CalendarFormat.month,
+      calendarStyle: CalendarStyle(
+        todayDecoration: BoxDecoration(color: Colors.blue[700], shape: BoxShape.circle),
+        selectedDecoration: BoxDecoration(color: Colors.blue[500], shape: BoxShape.circle),
+        markerDecoration: const BoxDecoration(color: Colors.green, shape: BoxShape.circle),
+      ),
+      calendarBuilders: CalendarBuilders(
+        markerBuilder: (context, date, events) {
+          bool hasAttendance = attendance.any((record) {
+            DateTime recordDate = (record['date'] as Timestamp).toDate();
+            return isSameDay(recordDate, date);
           });
+          if (hasAttendance) {
+            return Positioned(
+              right: 1,
+              bottom: 1,
+              child: Container(
+                width: 6,
+                height: 6,
+                decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.green),
+              ),
+            );
+          }
+          return null;
         },
-        calendarFormat: CalendarFormat.month,
-        calendarStyle: CalendarStyle(
-          todayDecoration: BoxDecoration(color: Colors.blue[700], shape: BoxShape.circle),
-          selectedDecoration: BoxDecoration(color: Colors.blue[500], shape: BoxShape.circle),
-          markerDecoration: const BoxDecoration(color: Colors.green, shape: BoxShape.circle),
-        ),
-        calendarBuilders: CalendarBuilders(
-          markerBuilder: (context, date, events) {
-            bool hasAttendance = attendance.any((record) {
-              DateTime recordDate = (record['date'] as Timestamp).toDate();
-              return recordDate.day == date.day &&
-                  recordDate.month == date.month &&
-                  recordDate.year == date.year;
-            });
-            if (hasAttendance) {
-              return Positioned(
-                right: 1,
-                bottom: 1,
-                child: Container(
-                  width: 6,
-                  height: 6,
-                  decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.green),
-                ),
-              );
-            }
-            return null;
-          },
-        ),
       ),
     );
   }
@@ -565,8 +586,9 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> with 
             ],
           ),
           const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Wrap(
+            spacing: 16,
+            runSpacing: 16,
             children: [
               _buildDetailItem('Check In', record['checkInTime'] ?? '--:--'),
               if (record['checkInLocation'] != null)
@@ -628,13 +650,20 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> with 
   }
 
   Widget _buildDetailItem(String label, String value) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: TextStyle(color: Colors.grey[600], fontSize: 12)),
-        const SizedBox(height: 4),
-        Text(value, style: const TextStyle(fontSize: 16)),
-      ],
+    return SizedBox(
+      width: 120,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: const TextStyle(fontSize: 16),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
     );
   }
 }
