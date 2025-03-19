@@ -326,7 +326,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Hey Deepankar!',
+                'Hey Aryan!',
                 style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.grey[800], letterSpacing: -0.5),
               ),
               const SizedBox(height: 4),
@@ -557,9 +557,9 @@ class NeumorphicCheckInButton extends StatelessWidget {
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  isCheckedIn ? Colors.red.shade300 : Colors.green.shade300,
-                  isCheckedIn ? Colors.red.shade100 : Colors.green.shade100,
-                  Colors.transparent,
+                  isCheckedIn ? Colors.red.shade300 : Colors.grey.shade300,
+                  isCheckedIn ? Colors.red.shade100 : Colors.grey.shade100,
+                  Colors.grey,
                 ],
                 stops: const [0.0, 0.7, 1.0],
               ),
@@ -596,7 +596,7 @@ class NeumorphicCheckInButton extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.bold,
-                      color: isCheckedIn ? Colors.red[700] : Colors.green[700],
+                      color: isCheckedIn ? Colors.red[700] : Colors.grey[700],
                       letterSpacing: 1.5,
                     ),
                   ),
@@ -610,7 +610,7 @@ class NeumorphicCheckInButton extends StatelessWidget {
             height: 220,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              border: Border.all(color: isCheckedIn ? Colors.red.withOpacity(0.2) : Colors.green.withOpacity(0.2), width: 2),
+              border: Border.all(color: isCheckedIn ? Colors.red.withOpacity(0.2) : Colors.grey.withOpacity(0.2), width: 2),
             ),
             child: Container(
               decoration: BoxDecoration(

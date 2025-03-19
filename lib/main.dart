@@ -39,9 +39,9 @@ class MyApp extends StatelessWidget {
             );
           }
           if (snapshot.hasData && snapshot.data != null) {
-            return  HomeScreen();
+            return  LoginScreen();
           } else {
-            return  HomeScreen();
+            return  LoginScreen();
           }
         },
       ),

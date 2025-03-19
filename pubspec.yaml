@@ -32,6 +32,8 @@ dependencies:
   shimmer:
   fl_chart:
   animate_do: ^3.0.2
+  file_picker:
+  local_auth:
 
   flutter_svg:
   animated_icon: ^0.0.8
@@ -52,7 +54,7 @@ flutter:
 
   assets:
      - assets/png/
-     - assets/ab.jpg
+     - assets/12.jpg
      - assets/animations/
      - assets/
 

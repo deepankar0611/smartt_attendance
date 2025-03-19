@@ -1,5 +1,12 @@
+import 'dart:ui';
+
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:smartt_attendance/screen/settingsheet.dart';
 import 'dart:io';
+
+import 'login_screen.dart';
+import 'edit_profile_sheet.dart'; // Add this import
 
 class ModernProfilePage extends StatefulWidget {
   const ModernProfilePage({Key? key}) : super(key: key);
@@ -8,29 +15,16 @@ class ModernProfilePage extends StatefulWidget {
   _ModernProfilePageState createState() => _ModernProfilePageState();
 }
 
-class _ModernProfilePageState extends State<ModernProfilePage>
-    with SingleTickerProviderStateMixin {
+class _ModernProfilePageState extends State<ModernProfilePage> {
   File? _profileImage;
-  late TabController _tabController;
-  bool _isDarkMode = false;
-
-  final Map<String, int> _stats = {
+  String _name = "Aryan bansal";
+  String _job = "Flutter developer";
+  String _location = "chandigarh";
+  Map<String, int> _stats = {
     'Projects': 12,
-    'Attended': 243,
-    'Leaves': 168,
+    'Attended': 25,
+    'Leaves': 2,
   };
-
-  @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: 2, vsync: this);
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
-  }
 
   void _showSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -44,82 +38,148 @@ class _ModernProfilePageState extends State<ModernProfilePage>
     );
   }
 
-  void _toggleTheme() => setState(() => _isDarkMode = !_isDarkMode);
+  void _logout() async {
+    try {
+      await FirebaseAuth.instance.signOut();
+      _showSnackBar('Logged out successfully');
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+            (Route<dynamic> route) => false,
+      );
+    } catch (e) {
+      _showSnackBar('Error logging out: $e');
+    }
+  }
 
-  void _logout() {
-    _showSnackBar('Logged out');
-    // Add actual logout logic here
+  void _showEditProfileSheet() async {
+    final result = await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent, // Make sheet background transparent
+      builder: (context) => Stack(
+        children: [
+          // Blur effect for background
+          BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 4.0, sigmaY: 4.0),
+            child: Container(
+              color: Colors.black.withOpacity(0.2), // Semi-transparent overlay
+            ),
+          ),
+          // The actual edit profile sheet
+          Center(
+            child: Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom,
+                left: 16,
+                right: 16,
+              ),
+              child: EditProfileSheet(
+                initialName: _name,
+                initialJob: _job,
+                initialLocation: _location,
+                initialProjects: _stats['Projects']!,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (result != null) {
+      setState(() {
+        _name = result['name'];
+        _job = result['job'];
+        _location = result['location'];
+        _stats['Projects'] = result['projects'];
+      });
+      _showSnackBar('Profile updated successfully');
+    }
+  }
+  void _showSettingsSheet() async {
+    final result = await showDialog(
+      context: context,
+      barrierColor: Colors.transparent,
+      builder: (context) => Stack(
+        children: [
+          BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 5.0, sigmaY: 5.0),
+            child: Container(
+              color: Colors.black.withOpacity(0.2),
+            ),
+          ),
+          Center(
+            child: Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom,
+                left: 16,
+                right: 16,
+              ),
+              child: const SettingsSheet(),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (result == 'update') {
+      _showSnackBar('Password update requested');
+    } else if (result == 'delete') {
+      try {
+        await FirebaseAuth.instance.currentUser?.delete();
+        _showSnackBar('Account deleted successfully');
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (context) => const LoginScreen()),
+              (Route<dynamic> route) => false,
+        );
+      } catch (e) {
+        _showSnackBar('Error deleting account: $e');
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    // Base color for the app
-    final Color baseColor = const Color(0xFF1B5E20); // Dark Green
-
-    final ThemeData theme = _isDarkMode
-        ? ThemeData.dark().copyWith(
-      primaryColor: baseColor,
-      colorScheme: ColorScheme.dark(
-        primary: baseColor,
-        secondary: baseColor.withOpacity(0.7),
-        surface: const Color(0xFF212121),
-      ),
-    )
-        : ThemeData.light().copyWith(
-      primaryColor: baseColor,
-      colorScheme: ColorScheme.light(
-        primary: baseColor,
-        secondary: baseColor.withOpacity(0.7),
-        surface: Colors.white,
-      ),
-    );
-
+    const Color baseColor = Color(0xFF1B5E20);
     final Color gradientStart = baseColor;
     final Color gradientEnd = baseColor.withOpacity(0.8);
-    final Color backgroundColor = _isDarkMode ? const Color(0xFF121212) : Colors.grey[100]!;
-    final Color textColor = _isDarkMode ? Colors.white : Colors.black87;
-    final Color subtitleColor = _isDarkMode ? Colors.grey[400]! : Colors.grey[700]!;
-    final Color cardColor = _isDarkMode ? Colors.grey[850]! : Colors.white;
 
-    return Theme(
-      data: theme,
-      child: Scaffold(
-        backgroundColor: backgroundColor,
-        appBar: AppBar(
-          backgroundColor: baseColor,
-          elevation: 0,
-          toolbarHeight: 5,
-
+    return Scaffold(
+      backgroundColor: Colors.grey[100],
+      appBar: AppBar(
+        backgroundColor: baseColor,
+        elevation: 0,
+        toolbarHeight: 5,
+      ),
+      body: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        child: Column(
+          children: [
+            _buildProfileHeader(gradientStart, gradientEnd),
+            const SizedBox(height: 24),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: _buildUserStatsRow(),
+            ),
+            const SizedBox(height: 24),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: _buildOptionsCard(baseColor),
+            ),
+            const SizedBox(height: 40),
+          ],
         ),
-        body: SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          child: Column(
-            children: [
-              _buildProfileHeader(gradientStart, gradientEnd, textColor),
-              const SizedBox(height: 24),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: _buildUserStatsRow(textColor, subtitleColor, cardColor),
-              ),
-              const SizedBox(height: 24),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: _buildOptionsCard(theme, textColor, baseColor),
-              ),
-              const SizedBox(height: 40),
-            ],
-          ),
-        ),
-        floatingActionButton: FloatingActionButton(
-          onPressed: _logout,
-          backgroundColor: baseColor,
-          child: const Icon(Icons.logout),
-        ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _logout,
+        backgroundColor: baseColor,
+        child: const Icon(Icons.logout),
       ),
     );
   }
 
-  Widget _buildProfileHeader(Color gradientStart, Color gradientEnd, Color textColor) {
+  Widget _buildProfileHeader(Color gradientStart, Color gradientEnd) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 30, horizontal: 20),
@@ -165,7 +225,7 @@ class _ModernProfilePageState extends State<ModernProfilePage>
                     border: Border.all(color: Colors.white, width: 3),
                     image: const DecorationImage(
                       fit: BoxFit.cover,
-                      image: AssetImage('assets/123.jpg'),
+                      image: AssetImage('assets/12.jpg'),
                     ),
                   ),
                 ),
@@ -180,8 +240,8 @@ class _ModernProfilePageState extends State<ModernProfilePage>
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(
-              "Richie Lorie",
-              style: TextStyle(
+              _name,
+              style: const TextStyle(
                 fontSize: 28,
                 fontWeight: FontWeight.w700,
                 color: Colors.white,
@@ -190,7 +250,7 @@ class _ModernProfilePageState extends State<ModernProfilePage>
           ),
           const SizedBox(height: 8),
           Text(
-            "Senior UI/UX Designer",
+            _job,
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w500,
@@ -211,8 +271,8 @@ class _ModernProfilePageState extends State<ModernProfilePage>
                 const Icon(Icons.location_on, color: Colors.white70, size: 18),
                 const SizedBox(width: 6),
                 Text(
-                  "San Francisco, CA",
-                  style: TextStyle(
+                  _location,
+                  style: const TextStyle(
                     fontSize: 14,
                     color: Colors.white70,
                     fontWeight: FontWeight.w500,
@@ -226,11 +286,11 @@ class _ModernProfilePageState extends State<ModernProfilePage>
     );
   }
 
-  Widget _buildUserStatsRow(Color textColor, Color subtitleColor, Color cardColor) {
+  Widget _buildUserStatsRow() {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: cardColor,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
@@ -249,17 +309,17 @@ class _ModernProfilePageState extends State<ModernProfilePage>
               children: [
                 Text(
                   entry.value.toString(),
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
-                    color: textColor,
+                    color: Colors.black87,
                   ),
                 ),
                 Text(
                   entry.key,
                   style: TextStyle(
                     fontSize: 14,
-                    color: subtitleColor,
+                    color: Colors.grey[700],
                   ),
                 ),
               ],
@@ -271,41 +331,33 @@ class _ModernProfilePageState extends State<ModernProfilePage>
     );
   }
 
-  Widget _buildOptionsCard(ThemeData theme, Color textColor, Color baseColor) {
+  Widget _buildOptionsCard(Color baseColor) {
     return Column(
       children: [
         _buildOptionButton(
-          theme,
           icon: Icons.edit,
           label: "Edit Profile",
-          color: Colors.black
-          ,
-          onTap: () => _showSnackBar('Edit Profile tapped'),
+          onTap: _showEditProfileSheet, // Updated to show the sheet
         ),
         const SizedBox(height: 16),
         _buildOptionButton(
-          theme,
           icon: Icons.settings,
           label: "Settings",
-          color: Colors.black,
-          onTap: () => _showSnackBar('Settings tapped'),
+          onTap: _showSettingsSheet,
         ),
         const SizedBox(height: 16),
         _buildOptionButton(
-          theme,
           icon: Icons.person_add,
           label: "Connect Friends",
-          color: Colors.black,
           onTap: () => _showSnackBar('Connect Friends tapped'),
         ),
       ],
     );
   }
 
-  Widget _buildOptionButton(ThemeData theme, {
+  Widget _buildOptionButton({
     required IconData icon,
     required String label,
-    required Color color,
     required VoidCallback onTap,
   }) {
     return GestureDetector(
@@ -331,7 +383,7 @@ class _ModernProfilePageState extends State<ModernProfilePage>
             const SizedBox(width: 8),
             Text(
               label,
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w500,
                 color: Colors.black,
