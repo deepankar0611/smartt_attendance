@@ -1,12 +1,11 @@
 import 'dart:ui';
-
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:smartt_attendance/screen/settingsheet.dart';
 import 'dart:io';
-
 import 'login_screen.dart';
-import 'edit_profile_sheet.dart'; // Add this import
+import 'edit_profile_sheet.dart';
 
 class ModernProfilePage extends StatefulWidget {
   const ModernProfilePage({Key? key}) : super(key: key);
@@ -17,14 +16,102 @@ class ModernProfilePage extends StatefulWidget {
 
 class _ModernProfilePageState extends State<ModernProfilePage> {
   File? _profileImage;
-  String _name = "Aryan bansal";
-  String _job = "Flutter developer";
-  String _location = "chandigarh";
+  String _name = "Aryan Bansal";
+  String _job = "Flutter Developer";
+  String _location = "Chandigarh";
+  String _mobile = "7479519946";
   Map<String, int> _stats = {
     'Projects': 12,
     'Attended': 25,
     'Leaves': 2,
   };
+
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  late String _userId;
+
+  @override
+  void initState() {
+    super.initState();
+    _userId = _auth.currentUser?.uid ?? '';
+    if (_userId.isEmpty) {
+      print('No user is currently signed in.');
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+      );
+    } else {
+      _fetchUserProfile();
+      _fetchAttendanceStats();
+    }
+  }
+
+  Future<void> _fetchUserProfile() async {
+    try {
+      DocumentSnapshot userDoc = await _firestore.collection('students').doc(
+          _userId).get();
+      if (userDoc.exists) {
+        final data = userDoc.data() as Map<String, dynamic>;
+        setState(() {
+          _name = data['name'] ?? "Aryan Bansal";
+          _job = data['job'] ?? "Flutter Developer";
+          _location = data['location'] ?? "Chandigarh";
+          _mobile = data['mobile'] ?? "7479519946";
+          _stats['Projects'] = data['projects'] ?? 12;
+        });
+      } else {
+        await _firestore.collection('students').doc(_userId).set({
+          'name': _name,
+          'job': _job,
+          'location': _location,
+          'mobile': _mobile,
+          'projects': _stats['Projects'],
+          'createdAt': FieldValue.serverTimestamp(),
+          'email': _auth.currentUser?.email ?? 'unknown',
+          'isEmailVerified': _auth.currentUser?.emailVerified ?? false,
+          'role': 'student',
+        }, SetOptions(merge: true));
+      }
+    } catch (e) {
+      _showSnackBar('Error fetching profile: $e');
+    }
+  }
+
+  Future<void> _fetchAttendanceStats() async {
+    try {
+      DateTime now = DateTime.now();
+      final snapshot = await _firestore
+          .collection('students')
+          .doc(_userId)
+          .collection('attendance')
+          .where(
+          'date', isGreaterThanOrEqualTo: DateTime(now.year, now.month, 1))
+          .where('date', isLessThan: DateTime(now.year, now.month + 1, 1))
+          .get();
+
+      int attendedDays = snapshot.docs.length;
+
+      int totalDaysInMonth = DateTime(now.year, now.month + 1, 0).day;
+      int workingDays = 0;
+      for (int day = 1; day <= totalDaysInMonth; day++) {
+        DateTime date = DateTime(now.year, now.month, day);
+        if (date.weekday != DateTime.saturday &&
+            date.weekday != DateTime.sunday) {
+          workingDays++;
+        }
+      }
+
+      int leaves = workingDays - attendedDays;
+      if (leaves < 0) leaves = 0;
+
+      setState(() {
+        _stats['Attended'] = attendedDays;
+        _stats['Leaves'] = leaves;
+      });
+    } catch (e) {
+      _showSnackBar('Error fetching attendance stats: $e');
+    }
+  }
 
   void _showSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -56,34 +143,37 @@ class _ModernProfilePageState extends State<ModernProfilePage> {
     final result = await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent, // Make sheet background transparent
-      builder: (context) => Stack(
-        children: [
-          // Blur effect for background
-          BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 4.0, sigmaY: 4.0),
-            child: Container(
-              color: Colors.black.withOpacity(0.2), // Semi-transparent overlay
-            ),
-          ),
-          // The actual edit profile sheet
-          Center(
-            child: Padding(
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(context).viewInsets.bottom,
-                left: 16,
-                right: 16,
+      backgroundColor: Colors.transparent,
+      builder: (context) =>
+          Stack(
+            children: [
+              BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 4.0, sigmaY: 4.0),
+                child: Container(
+                  color: Colors.black.withOpacity(0.2),
+                ),
               ),
-              child: EditProfileSheet(
-                initialName: _name,
-                initialJob: _job,
-                initialLocation: _location,
-                initialProjects: _stats['Projects']!,
+              Center(
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    bottom: MediaQuery
+                        .of(context)
+                        .viewInsets
+                        .bottom,
+                    left: 16,
+                    right: 16,
+                  ),
+                  child: EditProfileSheet(
+                    initialName: _name,
+                    initialJob: _job,
+                    initialLocation: _location,
+                    initialProjects: _stats['Projects']!,
+                    initialMobile: _mobile,
+                  ),
+                ),
               ),
-            ),
+            ],
           ),
-        ],
-      ),
     );
 
     if (result != null) {
@@ -91,42 +181,36 @@ class _ModernProfilePageState extends State<ModernProfilePage> {
         _name = result['name'];
         _job = result['job'];
         _location = result['location'];
+        _mobile = result['mobile'];
         _stats['Projects'] = result['projects'];
       });
-      _showSnackBar('Profile updated successfully');
+
+      try {
+        await _firestore.collection('students').doc(_userId).update({
+          'name': _name,
+          'job': _job,
+          'location': _location,
+          'mobile': _mobile,
+          'projects': _stats['Projects'],
+        });
+        _showSnackBar('Profile updated successfully');
+      } catch (e) {
+        _showSnackBar('Error updating profile: $e');
+      }
     }
   }
-  void _showSettingsSheet() async {
-    final result = await showDialog(
-      context: context,
-      barrierColor: Colors.transparent,
-      builder: (context) => Stack(
-        children: [
-          BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 5.0, sigmaY: 5.0),
-            child: Container(
-              color: Colors.black.withOpacity(0.2),
-            ),
-          ),
-          Center(
-            child: Padding(
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(context).viewInsets.bottom,
-                left: 16,
-                right: 16,
-              ),
-              child: const SettingsSheet(),
-            ),
-          ),
-        ],
-      ),
+
+  void _navigateToSettingsPage() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const SettingsPage()),
     );
 
     if (result == 'update') {
-      _showSnackBar('Password update requested');
+      _showSnackBar('Password updated successfully');
     } else if (result == 'delete') {
       try {
-        await FirebaseAuth.instance.currentUser?.delete();
+        // Account deletion is already handled in DeleteAccountPage, so we just navigate to LoginScreen
         _showSnackBar('Account deleted successfully');
         Navigator.pushAndRemoveUntil(
           context,
@@ -209,7 +293,10 @@ class _ModernProfilePageState extends State<ModernProfilePage> {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   gradient: LinearGradient(
-                    colors: [gradientStart.withOpacity(0.9), gradientEnd.withOpacity(0.7)],
+                    colors: [
+                      gradientStart.withOpacity(0.9),
+                      gradientEnd.withOpacity(0.7)
+                    ],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
@@ -304,45 +391,47 @@ class _ModernProfilePageState extends State<ModernProfilePage> {
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: _stats.entries
             .map(
-              (entry) => Expanded(
-            child: Column(
-              children: [
-                Text(
-                  entry.value.toString(),
-                  style: const TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
-                  ),
+              (entry) =>
+              Expanded(
+                child: Column(
+                  children: [
+                    Text(
+                      entry.value.toString(),
+                      style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    Text(
+                      entry.key,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey[700],
+                      ),
+                    ),
+                  ],
                 ),
-                Text(
-                  entry.key,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey[700],
-                  ),
-                ),
-              ],
-            ),
-          ),
+              ),
         )
             .toList(),
       ),
     );
   }
+
   Widget _buildOptionsCard(Color baseColor) {
     return Column(
       children: [
         _buildOptionButton(
           icon: Icons.edit,
           label: "Edit Profile",
-          onTap: _showEditProfileSheet, // Updated to show the sheet
+          onTap: _showEditProfileSheet,
         ),
         const SizedBox(height: 16),
         _buildOptionButton(
           icon: Icons.settings,
           label: "Settings",
-          onTap: _showSettingsSheet,
+          onTap: _navigateToSettingsPage, // Updated method
         ),
         const SizedBox(height: 16),
         _buildOptionButton(

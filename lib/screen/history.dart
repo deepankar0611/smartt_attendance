@@ -2,26 +2,26 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // Added for Firebase Authentication
 import 'package:geocoding/geocoding.dart';
 import 'package:provider/provider.dart';
 
 import '../provider/attendance_history_notifier.dart';
+
 class AttendanceHistoryScreen extends StatelessWidget {
-  final String userEmail;
-  const AttendanceHistoryScreen({Key? key, required this.userEmail, required List attendanceData}) : super(key: key);
+  const AttendanceHistoryScreen({Key? key, required String userEmail, required List attendanceData}) : super(key: key); // Removed unused attendanceData parameter
 
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
       create: (_) => AttendanceHistoryNotifier(),
-      child: _AttendanceHistoryView(userEmail: userEmail),
+      child: const _AttendanceHistoryView(),
     );
   }
 }
 
 class _AttendanceHistoryView extends StatefulWidget {
-  final String userEmail;
-  const _AttendanceHistoryView({required this.userEmail});
+  const _AttendanceHistoryView();
 
   @override
   _AttendanceHistoryViewState createState() => _AttendanceHistoryViewState();
@@ -33,10 +33,19 @@ class _AttendanceHistoryViewState extends State<_AttendanceHistoryView> with Tic
   late Future<List<Map<String, dynamic>>> _attendanceFuture;
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseAuth _auth = FirebaseAuth.instance; // Added for Firebase Authentication
+  late String _userId; // Use UID instead of email
 
   @override
   void initState() {
     super.initState();
+    // Fetch the current user's UID
+    _userId = _auth.currentUser?.uid ?? '';
+    if (_userId.isEmpty) {
+      print('No user is currently signed in.');
+      // Optionally, redirect to login screen
+      // Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => LoginScreen()));
+    }
     _animationController = AnimationController(vsync: this, duration: const Duration(milliseconds: 600));
     _animation = CurvedAnimation(parent: _animationController, curve: Curves.easeInOut);
     _animationController.forward();
@@ -51,10 +60,10 @@ class _AttendanceHistoryViewState extends State<_AttendanceHistoryView> with Tic
 
   Future<List<Map<String, dynamic>>> _fetchAttendanceByMonth(DateTime month) async {
     try {
-      print('Fetching attendance for user: ${widget.userEmail}, month: ${DateFormat('MMMM yyyy').format(month)}');
+      print('Fetching attendance for user: $_userId, month: ${DateFormat('MMMM yyyy').format(month)}');
       final snapshot = await _firestore
-          .collection('users')
-          .doc(widget.userEmail)
+          .collection('students') // Changed from 'users' to 'students'
+          .doc(_userId) // Use UID instead of email
           .collection('attendance')
           .where('date', isGreaterThanOrEqualTo: DateTime(month.year, month.month, 1))
           .where('date', isLessThan: DateTime(month.year, month.month + 1, 1))

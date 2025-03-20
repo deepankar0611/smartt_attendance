@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:ui';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // Added for Firebase Authentication
 import 'package:geolocator/geolocator.dart';
-import '../models/bottom_sheet.dart';
-import 'history.dart';
+import '../models/bottom_sheet.dart'; // Ensure this file exists
+import 'history.dart'; // Ensure this file exists
 
 class AttendanceScreen extends StatefulWidget {
   const AttendanceScreen({super.key});
@@ -24,9 +25,10 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
 
-  // Firebase instance
+  // Firebase instances
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final String _userEmail = 'deepankarsingh1@gmail.com'; // Hardcoded; replace with auth email in production
+  final FirebaseAuth _auth = FirebaseAuth.instance; // Added for Firebase Authentication
+  late String _userId; // Use UID instead of email
 
   // Location data
   Position? _checkInLocation;
@@ -35,6 +37,13 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
   @override
   void initState() {
     super.initState();
+    // Fetch the current user's UID
+    _userId = _auth.currentUser?.uid ?? '';
+    if (_userId.isEmpty) {
+      print('No user is currently signed in.');
+      // Optionally, redirect to login screen
+      // Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => LoginScreen()));
+    }
     _startTimeUpdating();
     _animationController = AnimationController(
       vsync: this,
@@ -84,26 +93,27 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
 
   Future<void> _initializeUserData() async {
     try {
-      DocumentSnapshot userDoc = await _firestore.collection('users').doc(_userEmail).get();
-      if (!userDoc.exists) {
-        await _firestore.collection('users').doc(_userEmail).set({
+      DocumentSnapshot studentDoc = await _firestore.collection('students').doc(_userId).get();
+      if (!studentDoc.exists) {
+        await _firestore.collection('students').doc(_userId).set({
           'createdAt': FieldValue.serverTimestamp(),
-          'email': _userEmail,
-          'isEmailVerified': false,
-          'mobile': '1234567890',
-          'name': 'deep',
+          'email': _auth.currentUser?.email ?? 'unknown', // Store the user's email
+          'isEmailVerified': _auth.currentUser?.emailVerified ?? false,
+          'mobile': '7479519946', // From the screenshot
+          'name': 'Deepankar', // From the screenshot
+          'role': 'student', // From the screenshot
         });
       }
     } catch (e) {
-      print('Error initializing user data: $e');
+      print('Error initializing student data: $e');
     }
   }
 
   Future<void> _saveAttendance(Map<String, dynamic> attendanceData) async {
     try {
       await _firestore
-          .collection('users')
-          .doc(_userEmail)
+          .collection('students') // Use 'students' collection
+          .doc(_userId) // Use UID as document ID
           .collection('attendance')
           .add(attendanceData);
     } catch (e) {
