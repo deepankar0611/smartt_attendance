@@ -31,13 +31,14 @@ dependencies:
   flutter_swiper_null_safety:
   shimmer:
   fl_chart:
-  animate_do: ^3.0.2
-  file_picker:
+  animate_do:
   local_auth:
-
   flutter_svg:
   animated_icon: ^0.0.8
   table_calendar:
+
+
+
 
 dev_dependencies:
   flutter_test:
