@@ -6,6 +6,8 @@ import 'package:smartt_attendance/screen/settingsheet.dart';
 import 'dart:io';
 import 'login_screen.dart';
 import 'edit_profile_sheet.dart';
+import 'package:image_picker/image_picker.dart'; // For picking images
+import 'package:supabase_flutter/supabase_flutter.dart'; // For Supabase integration
 
 class ModernProfilePage extends StatefulWidget {
   const ModernProfilePage({Key? key}) : super(key: key);
@@ -16,11 +18,12 @@ class ModernProfilePage extends StatefulWidget {
 
 class _ModernProfilePageState extends State<ModernProfilePage> {
   File? _profileImage;
+  String? _profileImageUrl; // To store the image URL from Firestore
   String _name = "Aryan Bansal";
   String _job = "Flutter Developer";
   String _location = "Chandigarh";
   String _mobile = "7479519946";
-  Map<String, int> _stats = {
+  final Map<String, int> _stats = {
     'Projects': 12,
     'Attended': 25,
     'Leaves': 2,
@@ -29,6 +32,9 @@ class _ModernProfilePageState extends State<ModernProfilePage> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   late String _userId;
+  final ImagePicker _picker = ImagePicker();
+  final SupabaseClient _supabase = Supabase.instance.client;
+  bool _isUploading = false;
 
   @override
   void initState() {
@@ -48,8 +54,7 @@ class _ModernProfilePageState extends State<ModernProfilePage> {
 
   Future<void> _fetchUserProfile() async {
     try {
-      DocumentSnapshot userDoc = await _firestore.collection('students').doc(
-          _userId).get();
+      DocumentSnapshot userDoc = await _firestore.collection('students').doc(_userId).get();
       if (userDoc.exists) {
         final data = userDoc.data() as Map<String, dynamic>;
         setState(() {
@@ -58,6 +63,7 @@ class _ModernProfilePageState extends State<ModernProfilePage> {
           _location = data['location'] ?? "Chandigarh";
           _mobile = data['mobile'] ?? "7479519946";
           _stats['Projects'] = data['projects'] ?? 12;
+          _profileImageUrl = data['profileImageUrl'];
         });
       } else {
         await _firestore.collection('students').doc(_userId).set({
@@ -70,6 +76,7 @@ class _ModernProfilePageState extends State<ModernProfilePage> {
           'email': _auth.currentUser?.email ?? 'unknown',
           'isEmailVerified': _auth.currentUser?.emailVerified ?? false,
           'role': 'student',
+          'profileImageUrl': null,
         }, SetOptions(merge: true));
       }
     } catch (e) {
@@ -84,8 +91,7 @@ class _ModernProfilePageState extends State<ModernProfilePage> {
           .collection('students')
           .doc(_userId)
           .collection('attendance')
-          .where(
-          'date', isGreaterThanOrEqualTo: DateTime(now.year, now.month, 1))
+          .where('date', isGreaterThanOrEqualTo: DateTime(now.year, now.month, 1))
           .where('date', isLessThan: DateTime(now.year, now.month + 1, 1))
           .get();
 
@@ -95,8 +101,7 @@ class _ModernProfilePageState extends State<ModernProfilePage> {
       int workingDays = 0;
       for (int day = 1; day <= totalDaysInMonth; day++) {
         DateTime date = DateTime(now.year, now.month, day);
-        if (date.weekday != DateTime.saturday &&
-            date.weekday != DateTime.sunday) {
+        if (date.weekday != DateTime.saturday && date.weekday != DateTime.sunday) {
           workingDays++;
         }
       }
@@ -110,6 +115,83 @@ class _ModernProfilePageState extends State<ModernProfilePage> {
       });
     } catch (e) {
       _showSnackBar('Error fetching attendance stats: $e');
+    }
+  }
+
+  Future<void> _pickAndUploadImage() async {
+    try {
+      // Show a dialog to choose between gallery and camera
+      final ImageSource? source = await showDialog<ImageSource>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Select Image Source'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, ImageSource.gallery),
+              child: const Text('Gallery'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, ImageSource.camera),
+              child: const Text('Camera'),
+            ),
+          ],
+        ),
+      );
+
+      if (source == null) return; // User canceled the dialog
+
+      // Pick an image using the non-deprecated API
+      final XFile? pickedFile = await _picker.pickImage(
+        source: source,
+        imageQuality: 80, // Reduce image quality to decrease file size
+      );
+
+      if (pickedFile == null) return; // User canceled the picker
+
+      setState(() {
+        _isUploading = true;
+      });
+
+      // Create a unique file name using the user ID and timestamp
+      String fileName = '$_userId-${DateTime.now().millisecondsSinceEpoch}.jpg';
+      File imageFile = File(pickedFile.path);
+
+      // Delete the old image from Supabase if it exists
+      if (_profileImageUrl != null && _profileImageUrl!.isNotEmpty) {
+        String oldFileName = _profileImageUrl!.split('/').last;
+        try {
+          await _supabase.storage.from('profile-pictures').remove([oldFileName]);
+        } catch (e) {
+          print('Error deleting old image: $e');
+        }
+      }
+
+      // Upload the image to Supabase
+      final String path = await _supabase.storage
+          .from('profile_pictures')
+          .upload(fileName, imageFile, fileOptions: const FileOptions(upsert: true));
+
+      // Get the public URL of the uploaded image
+      final String imageUrl = _supabase.storage.from('profile_pictures').getPublicUrl(fileName);
+
+      // Update Firestore with the image URL
+      await _firestore.collection('students').doc(_userId).update({
+        'profileImageUrl': imageUrl,
+      });
+
+      // Update the UI
+      setState(() {
+        _profileImageUrl = imageUrl;
+        _profileImage = imageFile; // For local preview before URL fetch
+      });
+
+      _showSnackBar('Profile picture updated successfully');
+    } catch (e) {
+      _showSnackBar('Error uploading image: $e');
+    } finally {
+      setState(() {
+        _isUploading = false;
+      });
     }
   }
 
@@ -144,36 +226,32 @@ class _ModernProfilePageState extends State<ModernProfilePage> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) =>
-          Stack(
-            children: [
-              BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 4.0, sigmaY: 4.0),
-                child: Container(
-                  color: Colors.black.withOpacity(0.2),
-                ),
-              ),
-              Center(
-                child: Padding(
-                  padding: EdgeInsets.only(
-                    bottom: MediaQuery
-                        .of(context)
-                        .viewInsets
-                        .bottom,
-                    left: 16,
-                    right: 16,
-                  ),
-                  child: EditProfileSheet(
-                    initialName: _name,
-                    initialJob: _job,
-                    initialLocation: _location,
-                    initialProjects: _stats['Projects']!,
-                    initialMobile: _mobile,
-                  ),
-                ),
-              ),
-            ],
+      builder: (context) => Stack(
+        children: [
+          BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 4.0, sigmaY: 4.0),
+            child: Container(
+              color: Colors.black.withOpacity(0.2),
+            ),
           ),
+          Center(
+            child: Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom,
+                left: 16,
+                right: 16,
+              ),
+              child: EditProfileSheet(
+                initialName: _name,
+                initialJob: _job,
+                initialLocation: _location,
+                initialProjects: _stats['Projects']!,
+                initialMobile: _mobile,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
 
     if (result != null) {
@@ -210,7 +288,6 @@ class _ModernProfilePageState extends State<ModernProfilePage> {
       _showSnackBar('Password updated successfully');
     } else if (result == 'delete') {
       try {
-        // Account deletion is already handled in DeleteAccountPage, so we just navigate to LoginScreen
         _showSnackBar('Account deleted successfully');
         Navigator.pushAndRemoveUntil(
           context,
@@ -293,10 +370,7 @@ class _ModernProfilePageState extends State<ModernProfilePage> {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   gradient: LinearGradient(
-                    colors: [
-                      gradientStart.withOpacity(0.9),
-                      gradientEnd.withOpacity(0.7)
-                    ],
+                    colors: [gradientStart.withOpacity(0.9), gradientEnd.withOpacity(0.7)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
@@ -304,17 +378,44 @@ class _ModernProfilePageState extends State<ModernProfilePage> {
               ),
               Hero(
                 tag: 'profile-image',
-                child: Container(
-                  width: 120,
-                  height: 120,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 3),
-                    image: const DecorationImage(
-                      fit: BoxFit.cover,
-                      image: AssetImage('assets/12.jpg'),
+                child: Stack(
+                  alignment: Alignment.bottomRight,
+                  children: [
+                    Container(
+                      width: 120,
+                      height: 120,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 3),
+                        image: DecorationImage(
+                          fit: BoxFit.cover,
+                          image: _profileImageUrl != null && _profileImageUrl!.isNotEmpty
+                              ? NetworkImage(_profileImageUrl!)
+                              : const AssetImage('assets/12.jpg') as ImageProvider,
+                        ),
+                      ),
                     ),
-                  ),
+                    GestureDetector(
+                      onTap: _isUploading ? null : _pickAndUploadImage,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white,
+                        ),
+                        child: _isUploading
+                            ? const CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
+                        )
+                            : const Icon(
+                          Icons.edit,
+                          size: 20,
+                          color: Colors.black,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -391,28 +492,27 @@ class _ModernProfilePageState extends State<ModernProfilePage> {
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: _stats.entries
             .map(
-              (entry) =>
-              Expanded(
-                child: Column(
-                  children: [
-                    Text(
-                      entry.value.toString(),
-                      style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
-                      ),
-                    ),
-                    Text(
-                      entry.key,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey[700],
-                      ),
-                    ),
-                  ],
+              (entry) => Expanded(
+            child: Column(
+              children: [
+                Text(
+                  entry.value.toString(),
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
                 ),
-              ),
+                Text(
+                  entry.key,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey[700],
+                  ),
+                ),
+              ],
+            ),
+          ),
         )
             .toList(),
       ),
@@ -431,7 +531,7 @@ class _ModernProfilePageState extends State<ModernProfilePage> {
         _buildOptionButton(
           icon: Icons.settings,
           label: "Settings",
-          onTap: _navigateToSettingsPage, // Updated method
+          onTap: _navigateToSettingsPage,
         ),
         const SizedBox(height: 16),
         _buildOptionButton(

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:ui';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart'; // Added for Firebase Authentication
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:geolocator/geolocator.dart';
 import '../models/bottom_sheet.dart'; // Ensure this file exists
 import 'history.dart'; // Ensure this file exists
@@ -27,17 +27,19 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
 
   // Firebase instances
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseAuth _auth = FirebaseAuth.instance; // Added for Firebase Authentication
-  late String _userId; // Use UID instead of email
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  late String _userId;
 
   // Location data
   Position? _checkInLocation;
   Position? _checkOutLocation;
 
+  // Profile picture URL
+  String? _profileImageUrl;
+
   @override
   void initState() {
     super.initState();
-    // Fetch the current user's UID
     _userId = _auth.currentUser?.uid ?? '';
     if (_userId.isEmpty) {
       print('No user is currently signed in.');
@@ -55,6 +57,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
     );
     _animationController.forward();
     _initializeUserData();
+    _fetchProfilePicture(); // Fetch the profile picture
     _requestLocationPermission();
   }
 
@@ -97,11 +100,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
       if (!studentDoc.exists) {
         await _firestore.collection('students').doc(_userId).set({
           'createdAt': FieldValue.serverTimestamp(),
-          'email': _auth.currentUser?.email ?? 'unknown', // Store the user's email
+          'email': _auth.currentUser?.email ?? 'unknown',
           'isEmailVerified': _auth.currentUser?.emailVerified ?? false,
-          'mobile': '7479519946', // From the screenshot
-          'name': 'Deepankar', // From the screenshot
-          'role': 'student', // From the screenshot
+          'mobile': '7479519946',
+          'name': 'Deepankar',
+          'role': 'student',
         });
       }
     } catch (e) {
@@ -109,11 +112,26 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
     }
   }
 
+  // Fetch profile picture URL from Firestore
+  Future<void> _fetchProfilePicture() async {
+    try {
+      DocumentSnapshot userDoc = await _firestore.collection('students').doc(_userId).get();
+      if (userDoc.exists) {
+        final data = userDoc.data() as Map<String, dynamic>;
+        setState(() {
+          _profileImageUrl = data['profileImageUrl'];
+        });
+      }
+    } catch (e) {
+      print('Error fetching profile picture: $e');
+    }
+  }
+
   Future<void> _saveAttendance(Map<String, dynamic> attendanceData) async {
     try {
       await _firestore
-          .collection('students') // Use 'students' collection
-          .doc(_userId) // Use UID as document ID
+          .collection('students')
+          .doc(_userId)
           .collection('attendance')
           .add(attendanceData);
     } catch (e) {
@@ -124,7 +142,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
   void _handleCheckIn(DateTime punchTime) async {
     HapticFeedback.mediumImpact();
     final formattedTime = _formatTime(punchTime);
-    _checkInLocation = await _getCurrentLocation(); // Capture check-in location
+    _checkInLocation = await _getCurrentLocation();
 
     setState(() {
       _isCheckedIn = true;
@@ -141,7 +159,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
   void _handleCheckOut(DateTime punchTime) async {
     HapticFeedback.mediumImpact();
     final formattedTime = _formatTime(punchTime);
-    _checkOutLocation = await _getCurrentLocation(); // Capture check-out location
+    _checkOutLocation = await _getCurrentLocation();
     String totalHours = '';
     if (_checkInDateTime != null) {
       Duration difference = punchTime.difference(_checkInDateTime!);
@@ -150,7 +168,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
       totalHours = "${hours}h ${minutes}m";
     }
 
-    // Create attendance record with location data
     final attendanceRecord = {
       'checkInTime': _checkInTime ?? '--:--',
       'checkInLocation': _checkInLocation != null
@@ -167,7 +184,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
       'breaks': [],
     };
 
-    // Save to Firestore subcollection
     await _saveAttendance(attendanceRecord);
 
     setState(() {
@@ -260,7 +276,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+      backgroundColor: Colors.transparent, // Correct parameter
       barrierColor: Colors.black.withOpacity(0.5),
       builder: (context) => LocationBottomSheet(
         onPunchIn: _handleCheckIn,
@@ -370,10 +386,12 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                   ),
                   borderRadius: BorderRadius.circular(24),
                 ),
-                child: const CircleAvatar(
+                child: CircleAvatar(
                   radius: 24,
                   backgroundColor: Colors.white,
-                  backgroundImage: AssetImage('assets/ab.jpg'),
+                  backgroundImage: _profileImageUrl != null && _profileImageUrl!.isNotEmpty
+                      ? NetworkImage(_profileImageUrl!)
+                      : const AssetImage('assets/ab.jpg') as ImageProvider,
                 ),
               ),
             ),
