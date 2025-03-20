@@ -5,6 +5,7 @@ class EditProfileSheet extends StatefulWidget {
   final String initialJob;
   final String initialLocation;
   final int initialProjects;
+  final String initialMobile; // Added mobile field
 
   const EditProfileSheet({
     Key? key,
@@ -12,6 +13,7 @@ class EditProfileSheet extends StatefulWidget {
     required this.initialJob,
     required this.initialLocation,
     required this.initialProjects,
+    required this.initialMobile, // Added to constructor
   }) : super(key: key);
 
   @override
@@ -23,6 +25,13 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
   late TextEditingController _jobController;
   late TextEditingController _locationController;
   late TextEditingController _projectsController;
+  late TextEditingController _mobileController; // Added mobile controller
+
+  String? _nameError;
+  String? _jobError;
+  String? _locationError;
+  String? _projectsError;
+  String? _mobileError;
 
   @override
   void initState() {
@@ -31,6 +40,7 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
     _jobController = TextEditingController(text: widget.initialJob);
     _locationController = TextEditingController(text: widget.initialLocation);
     _projectsController = TextEditingController(text: widget.initialProjects.toString());
+    _mobileController = TextEditingController(text: widget.initialMobile); // Initialize mobile
   }
 
   @override
@@ -39,27 +49,53 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
     _jobController.dispose();
     _locationController.dispose();
     _projectsController.dispose();
+    _mobileController.dispose();
     super.dispose();
   }
 
-  void _saveChanges() {
-    Navigator.pop(context, {
-      'name': _nameController.text,
-      'job': _jobController.text,
-      'location': _locationController.text,
-      'projects': int.tryParse(_projectsController.text) ?? widget.initialProjects,
+  bool _validateInputs() {
+    setState(() {
+      _nameError = _nameController.text.trim().isEmpty ? 'Name cannot be empty' : null;
+      _jobError = _jobController.text.trim().isEmpty ? 'Job cannot be empty' : null;
+      _locationError = _locationController.text.trim().isEmpty ? 'Location cannot be empty' : null;
+      _mobileError = _mobileController.text.trim().isEmpty
+          ? 'Mobile cannot be empty'
+          : !_mobileController.text.trim().startsWith(RegExp(r'[0-9]')) || _mobileController.text.trim().length != 10
+          ? 'Enter a valid 10-digit mobile number'
+          : null;
+      _projectsError = int.tryParse(_projectsController.text) == null || int.parse(_projectsController.text) < 0
+          ? 'Enter a valid number of projects'
+          : null;
     });
+
+    return _nameError == null &&
+        _jobError == null &&
+        _locationError == null &&
+        _mobileError == null &&
+        _projectsError == null;
+  }
+
+  void _saveChanges() {
+    if (_validateInputs()) {
+      Navigator.pop(context, {
+        'name': _nameController.text.trim(),
+        'job': _jobController.text.trim(),
+        'location': _locationController.text.trim(),
+        'projects': int.tryParse(_projectsController.text) ?? widget.initialProjects,
+        'mobile': _mobileController.text.trim(), // Return mobile
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: MediaQuery.of(context).size.width * 0.85, // 85% of screen width
-      constraints: const BoxConstraints(maxWidth: 400), // Maximum width cap
+      width: MediaQuery.of(context).size.width * 0.85,
+      constraints: const BoxConstraints(maxWidth: 400),
       padding: const EdgeInsets.all(24.0),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20), // Rounded corners on all sides
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.1),
@@ -95,18 +131,29 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
               controller: _nameController,
               label: 'Name',
               icon: Icons.person_outline,
+              errorText: _nameError,
             ),
             const SizedBox(height: 20),
             _buildTextField(
               controller: _jobController,
               label: 'Job Profile',
               icon: Icons.work_outline,
+              errorText: _jobError,
             ),
             const SizedBox(height: 20),
             _buildTextField(
               controller: _locationController,
               label: 'Location',
               icon: Icons.location_on_outlined,
+              errorText: _locationError,
+            ),
+            const SizedBox(height: 20),
+            _buildTextField(
+              controller: _mobileController,
+              label: 'Mobile',
+              icon: Icons.phone,
+              keyboardType: TextInputType.phone,
+              errorText: _mobileError,
             ),
             const SizedBox(height: 20),
             _buildTextField(
@@ -114,6 +161,7 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
               label: 'Projects',
               icon: Icons.folder_open,
               keyboardType: TextInputType.number,
+              errorText: _projectsError,
             ),
             const SizedBox(height: 32),
             ElevatedButton(
@@ -146,6 +194,7 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
     required String label,
     required IconData icon,
     TextInputType? keyboardType,
+    String? errorText,
   }) {
     return Container(
       decoration: BoxDecoration(
@@ -183,6 +232,8 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
             horizontal: 16,
             vertical: 18,
           ),
+          errorText: errorText,
+          errorStyle: const TextStyle(color: Colors.redAccent),
         ),
         style: const TextStyle(
           color: Colors.black87,
