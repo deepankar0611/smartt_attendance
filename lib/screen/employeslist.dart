@@ -13,27 +13,7 @@ class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> wit
   int _currentTabIndex = 0;
   TabController? _tabController;
 
-  final List<String> _departments = [
-    'All Departments',
-    'Engineering',
-    'Design',
-    'Product',
-    'Marketing',
-    'Human Resources',
-    'Finance',
-    'Customer Support'
-  ];
 
-  final List<Map<String, dynamic>> _departmentIcons = [
-    {'icon': Icons.business, 'color': Colors.blue},
-    {'icon': Icons.code, 'color': Colors.indigo},
-    {'icon': Icons.brush, 'color': Colors.purple},
-    {'icon': Icons.inventory_2, 'color': Colors.green},
-    {'icon': Icons.campaign, 'color': Colors.orange},
-    {'icon': Icons.people, 'color': Colors.red},
-    {'icon': Icons.account_balance, 'color': Colors.teal},
-    {'icon': Icons.headset_mic, 'color': Colors.amber},
-  ];
 
   // Three different data sets for each tab
   final List<List<Map<String, dynamic>>> _tabData = [
@@ -225,7 +205,7 @@ class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> wit
                         ),
                         SizedBox(width: 8),
                         Text(
-                          'Select Department',
+                          _selectedDepartment != null ? _selectedDepartment! : 'Select Department',
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
@@ -238,17 +218,33 @@ class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> wit
 
                   Divider(thickness: 1, height: 1),
 
-                  // Department attendance cards grid
-                  Padding(
-                    padding: const EdgeInsets.all(16.0),
+                  // Department attendance cards grid - expanded with more cards
+                  Expanded(
                     child: GridView.count(
-                      shrinkWrap: true,
-                      physics: NeverScrollableScrollPhysics(),
+                      controller: scrollController,
+                      padding: const EdgeInsets.all(16.0),
                       crossAxisCount: 2,
                       childAspectRatio: 1.5,
                       crossAxisSpacing: 12,
                       mainAxisSpacing: 12,
                       children: [
+                        // All Departments Card
+                        _buildDepartmentCard(
+                          icon: Icons.corporate_fare,
+                          iconColor: Colors.teal,
+                          title: 'All Departments',
+                          total: 150,
+                          onTime: 108,
+                          late: 35,
+                          leave: 7,
+                          onTap: () {
+                            setState(() {
+                              _selectedDepartment = 'All Departments';
+                            });
+                            Navigator.pop(context);
+                          },
+                        ),
+                        // Original cards
                         _buildDepartmentCard(
                           icon: Icons.design_services,
                           iconColor: Colors.blue,
@@ -257,6 +253,12 @@ class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> wit
                           onTime: 18,
                           late: 4,
                           leave: 1,
+                          onTap: () {
+                            setState(() {
+                              _selectedDepartment = 'Design';
+                            });
+                            Navigator.pop(context);
+                          },
                         ),
                         _buildDepartmentCard(
                           icon: Icons.code,
@@ -266,6 +268,12 @@ class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> wit
                           onTime: 40,
                           late: 18,
                           leave: 2,
+                          onTap: () {
+                            setState(() {
+                              _selectedDepartment = 'Development';
+                            });
+                            Navigator.pop(context);
+                          },
                         ),
                         _buildDepartmentCard(
                           icon: Icons.analytics,
@@ -275,6 +283,12 @@ class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> wit
                           onTime: 20,
                           late: 8,
                           leave: 0,
+                          onTap: () {
+                            setState(() {
+                              _selectedDepartment = 'Data Science';
+                            });
+                            Navigator.pop(context);
+                          },
                         ),
                         _buildDepartmentCard(
                           icon: Icons.people,
@@ -284,56 +298,75 @@ class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> wit
                           onTime: 7,
                           late: 5,
                           leave: 0,
+                          onTap: () {
+                            setState(() {
+                              _selectedDepartment = 'Sales';
+                            });
+                            Navigator.pop(context);
+                          },
+                        ),
+                        // Additional cards from the list
+                        _buildDepartmentCard(
+                          icon: Icons.support_agent,
+                          iconColor: Colors.red,
+                          title: 'Customer Support',
+                          total: 18,
+                          onTime: 15,
+                          late: 2,
+                          leave: 1,
+                          onTap: () {
+                            setState(() {
+                              _selectedDepartment = 'Customer Support';
+                            });
+                            Navigator.pop(context);
+                          },
+                        ),
+                        _buildDepartmentCard(
+                          icon: Icons.money,
+                          iconColor: Colors.green,
+                          title: 'Finance',
+                          total: 9,
+                          onTime: 8,
+                          late: 1,
+                          leave: 0,
+                          onTap: () {
+                            setState(() {
+                              _selectedDepartment = 'Finance';
+                            });
+                            Navigator.pop(context);
+                          },
+                        ),
+                        _buildDepartmentCard(
+                          icon: Icons.person,
+                          iconColor: Colors.deepPurple,
+                          title: 'HR',
+                          total: 7,
+                          onTime: 7,
+                          late: 0,
+                          leave: 0,
+                          onTap: () {
+                            setState(() {
+                              _selectedDepartment = 'HR';
+                            });
+                            Navigator.pop(context);
+                          },
+                        ),
+                        _buildDepartmentCard(
+                          icon: Icons.shopping_cart,
+                          iconColor: Colors.amber,
+                          title: 'Marketing',
+                          total: 14,
+                          onTime: 10,
+                          late: 3,
+                          leave: 1,
+                          onTap: () {
+                            setState(() {
+                              _selectedDepartment = 'Marketing';
+                            });
+                            Navigator.pop(context);
+                          },
                         ),
                       ],
-                    ),
-                  ),
-
-                  Divider(),
-
-                  // Department list
-                  Expanded(
-                    child: ListView.builder(
-                      controller: scrollController,
-                      padding: EdgeInsets.symmetric(vertical: 8),
-                      itemCount: _departments.length,
-                      itemBuilder: (context, index) {
-                        final isSelected = _selectedDepartment == _departments[index];
-                        return Container(
-                          margin: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: isSelected ? _departmentIcons[index]['color'].withOpacity(0.1) : Colors.transparent,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: ListTile(
-                            contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                            leading: CircleAvatar(
-                              backgroundColor: _departmentIcons[index]['color'].withOpacity(0.2),
-                              child: Icon(
-                                _departmentIcons[index]['icon'],
-                                color: _departmentIcons[index]['color'],
-                                size: 20,
-                              ),
-                            ),
-                            title: Text(
-                              _departments[index],
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                              ),
-                            ),
-                            trailing: isSelected
-                                ? Icon(Icons.check_circle, color: _departmentIcons[index]['color'])
-                                : null,
-                            onTap: () {
-                              setState(() {
-                                _selectedDepartment = _departments[index];
-                              });
-                              Navigator.pop(context);
-                            },
-                          ),
-                        );
-                      },
                     ),
                   ),
                 ],
@@ -345,7 +378,7 @@ class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> wit
     );
   }
 
-// Helper method to build department attendance card
+// Updated _buildDepartmentCard to include onTap functionality
   Widget _buildDepartmentCard({
     required IconData icon,
     required Color iconColor,
@@ -354,128 +387,176 @@ class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> wit
     required int onTime,
     required int late,
     required int leave,
+    required VoidCallback onTap,
   }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 8,
-            offset: Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(16),
-        child: InkWell(
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-          onTap: () {
-            // Handle card tap
-          },
-          child: Padding(
-            padding: const EdgeInsets.all(12.0),
-            child: Column(
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 8,
+              offset: Offset(0, 2),
+            ),
+          ],
+        ),
+        padding: EdgeInsets.all(5),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            // Top section with Total and status metrics
+            Row(
               crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                // Top row with total count
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Total',
-                          style: TextStyle(
-                            color: Colors.grey[500],
-                            fontSize: 12,
-                          ),
+                // Total number (left side, large)
+                Expanded(
+                  flex: 6,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Total',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[600],
                         ),
-                        Text(
-                          total.toString(),
-                          style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black87,
-                          ),
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        '$total',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.grey[800],
                         ),
-                      ],
-                    ),
-                    // Attendance breakdown
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        _buildAttendanceItem('On-time', onTime.toString()),
-                        _buildAttendanceItem('Late', late.toString()),
-                        _buildAttendanceItem('Leave', leave > 0 ? leave.toString() : '--'),
-                      ],
-                    ),
-                  ],
+                      ),
+                    ],
+                  ),
                 ),
 
-                // Department name with icon
-                Row(
-                  children: [
-                    Icon(
-                      icon,
-                      size: 16,
-                      color: iconColor,
+                // Vertical divider between Total and status metrics
+                Container(
+                  height: 70,
+                  width: 1,
+                  color: Colors.grey[200],
+                ),
+
+                // Status metrics (right side)
+                Expanded(
+                  flex: 8,
+                  child: Padding(
+                    padding: EdgeInsets.only(left: 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // On-time
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'On-time',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                            Spacer(),
+                            Text(
+                              onTime.toString().padLeft(2, '0'),
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.grey[800],
+                              ),
+                            ),
+                          ],
+                        ),
+                        Divider(height: 8, thickness: 0.5, color: Colors.grey[200]),
+
+                        // Late
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'Late',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                            Spacer(),
+                            Text(
+                              late.toString().padLeft(2, '0'),
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.grey[800],
+                              ),
+                            ),
+                          ],
+                        ),
+                        Divider(height: 8, thickness: 0.5, color: Colors.grey[200]),
+
+                        // Leave
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'Leave',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                            Spacer(),
+                            Text(
+                              leave > 0 ? leave.toString().padLeft(2, '0') : '--',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.grey[800],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
-                    SizedBox(width: 6),
-                    Text(
-                      title,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.grey[800],
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ],
             ),
-          ),
+            // Horizontal divider before department info
+            Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: Divider(height: 1, thickness: 0.5, color: Colors.grey[200]),
+            ),
+            // Department name and icon at bottom
+            Row(
+              children: [
+                Icon(
+                  icon,
+                  color: iconColor,
+                  size: 18,
+                ),
+                SizedBox(width: 8),
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.grey[800],
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
-  }
-
-// Helper method for attendance breakdown items
-  Widget _buildAttendanceItem(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 2.0),
-      child: Row(
-        children: [
-          Text(
-            '$label',
-            style: TextStyle(
-              fontSize: 11,
-              color: Colors.grey[500],
-            ),
-          ),
-          SizedBox(width: 8),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-              color: Colors.grey[800],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-// Add this helper function
-  int _getEmployeeCount(int departmentIndex) {
-    // Replace with actual logic to get employee count per department
-    return 5 + departmentIndex * 3; // Dummy count for demonstration
   }
 
   @override
@@ -577,7 +658,7 @@ class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> wit
                           children: [
                             Icon(Icons.timer, size: 16),
                             SizedBox(width: 4),
-                            Text('On Time (80)'),
+                            Text('On Time'),
                           ],
                         ),
                       ),
@@ -598,49 +679,101 @@ class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> wit
                 // Search Bar
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                  child: Container(
-                    height: 44,
+                  child: AnimatedContainer(
+                    duration: Duration(milliseconds: 300),
+                    height: 48,
                     decoration: BoxDecoration(
-                      color: Colors.grey[100],
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.grey[300]!),
-                    ),
-                    child: Row(
-                      children: [
-                        Padding(
-                          padding: EdgeInsets.only(left: 12),
-                          child: Icon(
-                            Icons.search,
-                            color: Colors.grey[500],
-                            size: 20,
-                          ),
-                        ),
-                        SizedBox(width: 8),
-                        Expanded(
-                          child: TextField(
-                            decoration: InputDecoration(
-                              hintText: 'Search employees',
-                              hintStyle: TextStyle(
-                                color: Colors.grey[400],
-                                fontSize: 14,
-                              ),
-                              border: InputBorder.none,
-                              contentPadding: EdgeInsets.symmetric(vertical: 12),
-                            ),
-                          ),
-                        ),
-                        TextButton(
-                          onPressed: () {},
-                          child: Text(
-                            'View all employees',
-                            style: TextStyle(
-                              color: Colors.blue[700],
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey[200]!),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.05),
+                          blurRadius: 8,
+                          offset: Offset(0, 2),
                         ),
                       ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: Row(
+                          children: [
+                            Padding(
+                              padding: EdgeInsets.only(left: 16),
+                              child: AnimatedSwitcher(
+                                duration: Duration(milliseconds: 300),
+                                transitionBuilder: (Widget child, Animation<double> animation) {
+                                  return ScaleTransition(scale: animation, child: child);
+                                },
+                                child: Icon(
+                                  Icons.search,
+                                  key: ValueKey('searchIcon'),
+                                  color: Colors.grey[600],
+                                  size: 20,
+                                ),
+                              ),
+                            ),
+                            SizedBox(width: 12),
+                            Expanded(
+                              child: TweenAnimationBuilder<double>(
+                                duration: Duration(milliseconds: 400),
+                                tween: Tween<double>(begin: 0.0, end: 1.0),
+                                builder: (context, value, child) {
+                                  return Opacity(
+                                    opacity: value,
+                                    child: child,
+                                  );
+                                },
+                                child: TextField(
+                                  decoration: InputDecoration(
+                                    hintText: 'Search employees...',
+                                    hintStyle: TextStyle(
+                                      color: Colors.grey[400],
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                    border: InputBorder.none,
+                                    contentPadding: EdgeInsets.symmetric(vertical: 14),
+                                  ),
+                                  onChanged: (value) {
+                                    // Add your search functionality here
+                                  },
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey[800],
+                                  ),
+                                  cursorColor: Colors.blue[700],
+                                  cursorWidth: 1.5,
+                                  cursorRadius: Radius.circular(2),
+                                ),
+                              ),
+                            ),
+                            InkWell(
+                              onTap: () {},
+                              borderRadius: BorderRadius.circular(8),
+                              child: AnimatedContainer(
+                                duration: Duration(milliseconds: 300),
+                                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue[50],
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  'View All',
+                                  style: TextStyle(
+                                    color: Colors.blue[700],
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            SizedBox(width: 8),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
                 ),

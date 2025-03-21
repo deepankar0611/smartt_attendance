@@ -69,39 +69,44 @@ class _SignUpState extends State<SignUp> with SingleTickerProviderStateMixin {
       });
 
       try {
-        UserCredential userCredential =
-        await _auth.createUserWithEmailAndPassword(
+        UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
           email: _emailController.text.trim(),
           password: _passwordController.text.trim(),
         );
 
         String uid = userCredential.user!.uid;
 
-        // Use the selected user type to determine the collection
-        String collectionName =
-        _selectedUserType == UserType.student ? 'students' : 'teachers';
+        // Determine the collection based on user type
+        String collectionName = _selectedUserType == UserType.student ? 'students' : 'teachers';
 
+        // Save user data to the appropriate collection
         await _firestore.collection(collectionName).doc(uid).set({
           'name': _nameController.text.trim(),
           'email': _emailController.text.trim(),
           'mobile': _mobileController.text.trim(),
           'createdAt': FieldValue.serverTimestamp(),
-          'role': _selectedUserType == UserType.student ? 'student' : 'teacher', // Store the role
-          'isEmailVerified': false, // You can remove this if you handle verification separately
+          'role': _selectedUserType == UserType.student ? 'student' : 'teacher',
+          'isEmailVerified': false,
         });
 
+        // Send email verification
         await userCredential.user!.sendEmailVerification();
 
+        // Show success message based on user type
+        String successMessage = _selectedUserType == UserType.teacher
+            ? 'Registration successful! Please check your email for verification.'
+            : 'Registration successful! Please verify your email.';
+
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Registration successful! Please verify your email.',
-            ),
+          SnackBar(
+            content: Text(successMessage),
+            duration: const Duration(seconds: 5), // Give user time to read
           ),
         );
-        await _auth.signOut(); // Sign out the user after registration
-        // ignore: use_build_context_synchronously
-        Navigator.pop(context);
+
+        await _auth.signOut(); // Sign out after registration
+        Navigator.pop(context); // Return to previous screen (likely login)
+
       } on FirebaseAuthException catch (e) {
         String message;
         switch (e.code) {

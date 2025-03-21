@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:smartt_attendance/admin_bottom_nav.dart';
 import 'package:smartt_attendance/screen/Sign%20Up.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:local_auth/local_auth.dart'; // Add this import
+import 'package:local_auth/local_auth.dart';
+import 'package:smartt_attendance/screen/teacher_admin_panel.dart';
 import '../bottom_navigation_bar.dart';
-import '../student/homepage.dart';
-
 enum UserType { student, teacher }
 
 class LoginScreen extends StatefulWidget {
@@ -21,7 +21,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   final TextEditingController _passwordController = TextEditingController();
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final LocalAuthentication _localAuth = LocalAuthentication(); // Initialize local auth
+  final LocalAuthentication _localAuth = LocalAuthentication();
   bool _isLoading = false;
   UserType _selectedUserType = UserType.student;
 
@@ -73,7 +73,13 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       if (userDoc.exists) {
         if (userCredential.user!.emailVerified) {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Login successful!')));
-          Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const HomeScreen()));
+
+          // Navigate based on user type
+          if (_selectedUserType == UserType.student) {
+            Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const HomeScreen()));
+          } else if (_selectedUserType == UserType.teacher) {
+            Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => AdminBottomNav()));
+          }
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -111,7 +117,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     }
   }
 
-  // Add face recognition login method
   Future<void> _loginWithFaceRecognition() async {
     try {
       bool canCheckBiometrics = await _localAuth.canCheckBiometrics;
@@ -127,15 +132,13 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       bool authenticated = await _localAuth.authenticate(
         localizedReason: 'Please authenticate using your face to log in',
         options: const AuthenticationOptions(
-          biometricOnly: true, // Restrict to biometric (face/fingerprint)
+          biometricOnly: true,
           useErrorDialogs: true,
           stickyAuth: true,
         ),
       );
 
       if (authenticated) {
-        // Assuming the user is already logged in or has a saved session
-        // You might want to link this with Firebase user data
         User? user = _auth.currentUser;
         if (user != null) {
           String collectionName = _selectedUserType == UserType.student ? 'students' : 'teachers';
@@ -143,7 +146,11 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
 
           if (userDoc.exists && user.emailVerified) {
             ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Login successful!')));
-            Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const HomeScreen()));
+            if (_selectedUserType == UserType.student) {
+              Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const HomeScreen()));
+            } else if (_selectedUserType == UserType.teacher) {
+              Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => AdminBottomNav()));
+            }
           } else {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text('User not found or email not verified')),
