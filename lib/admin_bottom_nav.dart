@@ -53,7 +53,7 @@ class _AdminBottomNavState extends State<AdminBottomNav> {
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
             _buildNavItem(Icons.home, "Attendance", 0),
-            _buildNavItem(Icons.calendar_month, "History", 1),
+            _buildNavItem(Icons.calendar_month, "dashboard", 1),
             _buildNavItem(Icons.person, "Profile", 2),
           ],
         ),

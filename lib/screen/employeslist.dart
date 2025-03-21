@@ -562,7 +562,22 @@ class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> wit
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Color(0xFFF5F7FA),
+      backgroundColor: Colors.white,
+      appBar:  AppBar(
+        title: const Text('Departments', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22, color: Colors.white)),
+        centerTitle: true,
+        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(bottom: Radius.circular(20))),
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xff003300), Color(0xff006600)],
+            ),
+            borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
+          ),
+        ),
+      ),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16.0),
@@ -579,47 +594,43 @@ class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> wit
               ],
             ),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.start,
               children: [
                 // Department Selector
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                  child: InkWell(
-
-                    onTap: _showDepartmentSheet,
-                    borderRadius: BorderRadius.circular(8),
-                    child: Container(
-                      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        border: Border.all(color: Colors.grey[300]!),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.business,
-                            size: 18,
-                            color: Colors.blue[700],
+                InkWell(
+                  onTap: _showDepartmentSheet,
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      border: Border.all(color: Colors.grey[100]!),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.badge,
+                          size: 18,
+                          color: Colors.black,
+                        ),
+                        SizedBox(width: 8),
+                        Text(
+                          _selectedDepartment,
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.grey[800],
                           ),
-                          SizedBox(width: 8),
-                          Text(
-                            _selectedDepartment,
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w500,
-                              color: Colors.grey[800],
-                            ),
-                          ),
-                          SizedBox(width: 4),
-                          Icon(
-                            Icons.keyboard_arrow_down,
-                            size: 18,
-                            color: Colors.grey[600],
-                          ),
-                        ],
-                      ),
+                        ),
+                        SizedBox(width: 4),
+                        Icon(
+                          Icons.keyboard_arrow_down,
+                          size: 18,
+                          color: Colors.grey[600],
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -637,38 +648,46 @@ class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> wit
                   ),
                   child: TabBar(
                     controller: _tabController,
-                    indicatorColor: Colors.blue[700],
-                    indicatorWeight: 3,
-                    labelColor: Colors.blue[700],
-                    unselectedLabelColor: Colors.grey[500],
+                    indicatorColor: Colors.black, // Simple, bold indicator
+                    indicatorWeight: 2, // Thinner for minimalism
+                    labelColor: Colors.black, // Neutral, minimalist color
+                    unselectedLabelColor: Colors.grey[600], // Soft grey for contrast
+                    labelStyle: const TextStyle(
+                      fontWeight: FontWeight.w500,
+                      fontSize: 16,
+                    ),
+                    unselectedLabelStyle: const TextStyle(
+                      fontWeight: FontWeight.w400,
+                      fontSize: 13,
+                    ),
                     tabs: [
                       Tab(
                         child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.login, size: 16),
-                            SizedBox(width: 4),
-                            Text('Logged in'),
+                            Icon(Icons.login, size: 19), // Smaller icon
+                            const SizedBox(width: 6), // Tight spacing
+                            const Text('Logged In'),
                           ],
                         ),
                       ),
                       Tab(
                         child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.timer, size: 16),
-                            SizedBox(width: 4),
-                            Text('On Time'),
+                            Icon(Icons.table_chart_sharp, size: 16),
+                            const SizedBox(width: 6),
+                            const Text('On Time'),
                           ],
                         ),
                       ),
                       Tab(
                         child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.schedule, size: 16),
-                            SizedBox(width: 4),
-                            Text('Late (30)'),
+                            Icon(Icons.schedule, size: 14),
+                            const SizedBox(width: 6),
+                            const Text('Late (30)'),
                           ],
                         ),
                       ),
@@ -801,166 +820,200 @@ class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> wit
                               borderRadius: BorderRadius.circular(12),
                               side: BorderSide(color: Colors.grey[100]!),
                             ),
-                            child: Padding(
-                              padding: EdgeInsets.all(12),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  // Avatar
-                                  CircleAvatar(
-                                    radius: 22,
-                                    backgroundColor: employee['avatar'],
-                                    child: Text(
-                                      employee['name'].substring(0, 1),
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                  SizedBox(width: 12),
-
-                                  // Employee Info
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          employee['name'],
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.w600,
-                                            color: Colors.black,
-                                            fontSize: 15,
-                                          ),
-                                        ),
-                                        SizedBox(height: 4),
-                                        Row(
-                                          children: [
-                                            Icon(
-                                              _getPositionIcon(employee['position']),
-                                              size: 14,
-                                              color: Colors.black,
-                                            ),
-                                            SizedBox(width: 4),
-                                            Text(
-                                              '${employee['position']} | ${employee['status']}',
-                                              style: TextStyle(
-                                                color: Colors.black,
-                                                fontSize: 13,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                        SizedBox(height: 4),
-                                        Row(
-                                          children: [
-                                            Icon(
-                                              Icons.login,
-                                              size: 14,
-                                              color: Colors.black54,
-                                            ),
-                                            SizedBox(width: 4),
-                                            Text(
-                                              'Login - ${employee['loginTime']}',
-                                              style: TextStyle(
-                                                color: Colors.black54,
-                                                fontSize: 13,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                        SizedBox(height: 4),
-                                        Row(
-                                          children: [
-                                            Icon(
-                                              Icons.logout,
-                                              size: 14,
-                                              color: Colors.black54,
-                                            ),
-                                            SizedBox(width: 4),
-                                            Text(
-                                              'Logout - ${employee['logoutTime']}',
-                                              style: TextStyle(
-                                                color: Colors.black54,
-                                                fontSize: 13,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-
-                                  // Status Indicator
-                                  Column(
-                                    crossAxisAlignment: CrossAxisAlignment.end,
-                                    children: [
-                                      Container(
-                                        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                        decoration: BoxDecoration(
-                                          color: isLate
-                                              ? Colors.red[50]
-                                              : Colors.green[50],
-                                          borderRadius: BorderRadius.circular(12),
-                                          border: Border.all(
-                                            color: isLate
-                                                ? Colors.red[300]!
-                                                : Colors.green[300]!,
-                                          ),
-                                        ),
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Icon(
-                                              isLate ? Icons.schedule : Icons.check_circle,
-                                              size: 12,
-                                              color: isLate
-                                                  ? Colors.red[400]
-                                                  : Colors.green[400],
-                                            ),
-                                            SizedBox(width: 4),
-                                            Text(
-                                              employee['attendance'],
-                                              style: TextStyle(
-                                                color: isLate
-                                                    ? Colors.red[400]
-                                                    : Colors.green[400],
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.w500,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-
-                                      // Detail button
-                                      if (index == 1 || (tabIndex == 1 && index == 0) || (tabIndex == 2 && index == 0))
-                                        Padding(
-                                          padding: EdgeInsets.only(top: 12),
-                                          child: Container(
-                                            width: 32,
-                                            height: 32,
-                                            decoration: BoxDecoration(
-                                              color: Colors.grey[100],
-                                              shape: BoxShape.circle,
-                                              boxShadow: [
-                                                BoxShadow(
-                                                  color: Colors.black.withOpacity(0.08),
-                                                  blurRadius: 4,
-                                                  offset: Offset(0, 2),
-                                                ),
-                                              ],
-                                            ),
-                                            child: Icon(
-                                              Icons.chevron_right,
-                                              color: Colors.grey[500],
-                                              size: 20,
-                                            ),
-                                          ),
-                                        ),
-                                    ],
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(8),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.grey.withOpacity(0.1),
+                                    spreadRadius: 1,
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
                                   ),
                                 ],
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(12.0),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    // Avatar Section
+                                    Container(
+                                      width: 48, // 2 * radius to match the original CircleAvatar size
+                                      height: 58,
+                                      decoration: BoxDecoration(
+                                        color: employee['avatar'] ?? Colors.grey[400],
+                                        borderRadius: BorderRadius.circular(8), // Optional: adjust for rounded corners, set to 0 for sharp edges
+                                      ),
+                                      child: Center(
+                                        child: Text(
+                                          employee['name']?.substring(0, 1) ?? '?',
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+
+                                    // Employee Information Section
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          // Name
+                                          Text(
+                                            employee['name'] ?? 'Unknown Employee',
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.w600,
+                                              color: Colors.black87,
+                                              fontSize: 16,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 8),
+
+                                          // Position and Status
+                                          Row(
+                                            children: [
+                                              Icon(
+                                                _getPositionIcon(employee['position']),
+                                                size: 16,
+                                                color: Colors.grey[600],
+                                              ),
+                                              const SizedBox(width: 6),
+                                              Text(
+                                                '${employee['position'] ?? 'N/A'} | ${employee['status'] ?? 'N/A'}',
+                                                style: TextStyle(
+                                                  color: Colors.grey[800],
+                                                  fontSize: 14,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 12),
+
+                                          // Location
+                                          Row(
+                                            children: [
+                                              Icon(
+                                                Icons.location_on,
+                                                size: 12,
+                                                color: Colors.grey[600],
+                                              ),
+                                              const SizedBox(width: 6),
+                                              Expanded(
+                                                child: Text(
+                                                  'Location: ${employee['location'] ?? 'Not specified'}',
+                                                  style: TextStyle(
+                                                    color: Colors.grey[700],
+                                                    fontSize: 12,
+                                                  ),
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 12),
+
+                                          // Divider
+                                          Divider(
+                                            color: Colors.grey[200],
+                                            thickness: 1,
+                                            height: 5,
+                                          ),
+
+                                          // Login Info
+                                          Row(
+                                            children: [
+                                              Icon(
+                                                Icons.login,
+                                                size: 14,
+                                                color: Colors.grey[600],
+                                              ),
+                                              const SizedBox(width: 6),
+                                              Text(
+                                                'Login: ${employee['loginTime'] ?? 'Not recorded'}',
+                                                style: TextStyle(
+                                                  color: Colors.grey[700],
+                                                  fontSize: 11,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 8),
+
+                                          // Logout Info
+                                          Row(
+                                            children: [
+                                              Icon(
+                                                Icons.logout,
+                                                size: 14,
+                                                color: Colors.grey[600],
+                                              ),
+                                              const SizedBox(width: 6),
+                                              Text(
+                                                'Logout: ${employee['logoutTime'] ?? 'Not recorded'}',
+                                                style: TextStyle(
+                                                  color: Colors.grey[700],
+                                                  fontSize: 11,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+
+                                    // Status Indicator Section
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.end,
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                          decoration: BoxDecoration(
+                                            color: isLate ? Colors.red[50] : Colors.green[50],
+                                            borderRadius: BorderRadius.circular(19),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(
+                                                isLate ? Icons.schedule : Icons.check_circle,
+                                                size: 14,
+                                                color: isLate ? Colors.red[400] : Colors.green[400],
+                                              ),
+                                              const SizedBox(width: 6),
+                                              Text(
+                                                employee['attendance'] ?? 'Unknown',
+                                                style: TextStyle(
+                                                  color: isLate ? Colors.red[400] : Colors.green[400],
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.w500,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        // Late Time Display (only shown if isLate is true)
+                                        if (isLate)
+                                          Padding(
+                                            padding: const EdgeInsets.only(top: 6),
+                                            child: Text(
+                                              'Late by ${employee['lateDuration'] ?? 'N/A'}',
+                                              style: TextStyle(
+                                                color: Colors.red[400],
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w400,
+                                              ),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           );
