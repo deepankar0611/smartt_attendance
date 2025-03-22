@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:smartt_attendance/screen/attendance-screen.dart';
 import 'package:smartt_attendance/screen/employeslist.dart';
 import 'package:smartt_attendance/screen/history.dart';
+import 'package:smartt_attendance/screen/homeadmin.dart';
 import 'package:smartt_attendance/screen/profile%20page.dart';
 import 'package:smartt_attendance/screen/teacher_admin_panel.dart';
 
@@ -19,7 +20,7 @@ class _AdminBottomNavState extends State<AdminBottomNav> {
 
   // Use const where possible to avoid unnecessary rebuilds
   final List<Widget> _pages = [
-    const TeacherAdminPanel(),
+     AdminDashboard(),
      EmployeeAttendanceScreen(),
     TeacherAdminPanel(),
   ];
