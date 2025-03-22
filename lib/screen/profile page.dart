@@ -7,7 +7,9 @@ import 'dart:io';
 import 'login_screen.dart';
 import 'edit_profile_sheet.dart';
 import 'package:image_picker/image_picker.dart'; // For picking images
-import 'package:supabase_flutter/supabase_flutter.dart'; // For Supabase integration
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import 'notification.dart'; // For Supabase integration
 
 class ModernProfilePage extends StatefulWidget {
   const ModernProfilePage({Key? key}) : super(key: key);
@@ -534,11 +536,18 @@ class _ModernProfilePageState extends State<ModernProfilePage> {
           onTap: _navigateToSettingsPage,
         ),
         const SizedBox(height: 16),
+        const SizedBox(height: 16),
         _buildOptionButton(
           icon: Icons.person_add,
           label: "Connect Friends",
-          onTap: () => _showSnackBar('Connect Friends tapped'),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => FriendRequestAcceptPage()),
+            );
+          },
         ),
+
       ],
     );
   }

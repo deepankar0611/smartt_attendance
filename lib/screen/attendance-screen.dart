@@ -43,8 +43,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
     _userId = _auth.currentUser?.uid ?? '';
     if (_userId.isEmpty) {
       print('No user is currently signed in.');
-      // Optionally, redirect to login screen
-      // Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => LoginScreen()));
     }
     _startTimeUpdating();
     _animationController = AnimationController(
@@ -57,8 +55,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
     );
     _animationController.forward();
     _initializeUserData();
-    _fetchProfilePicture(); // Fetch the profile picture
+    _fetchProfilePicture();
     _requestLocationPermission();
+    _loadCurrentStatus(); // Load initial status
   }
 
   @override
@@ -112,7 +111,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
     }
   }
 
-  // Fetch profile picture URL from Firestore
   Future<void> _fetchProfilePicture() async {
     try {
       DocumentSnapshot userDoc = await _firestore.collection('students').doc(_userId).get();
@@ -139,56 +137,109 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
     }
   }
 
+  // Load the current check-in status from Firestore
+  Future<void> _loadCurrentStatus() async {
+    try {
+      DocumentSnapshot userDoc = await _firestore.collection('students').doc(_userId).get();
+      if (userDoc.exists) {
+        final data = userDoc.data() as Map<String, dynamic>;
+        setState(() {
+          _isCheckedIn = data['isCheckedIn'] ?? false;
+          _checkInTime = data['checkInTime'];
+          _checkOutTime = data['checkOutTime'];
+          _totalHours = data['totalHours'];
+        });
+      }
+    } catch (e) {
+      print('Error loading status: $e');
+    }
+  }
+
+  Future<void> _updateCheckInStatus(DateTime punchTime, Position location) async {
+    try {
+      final formattedTime = _formatTime(punchTime);
+      await _firestore.collection('students').doc(_userId).set({
+        'isCheckedIn': true,
+        'checkInTime': formattedTime,
+        'checkInLocation': {
+          'latitude': location.latitude,
+          'longitude': location.longitude,
+        },
+        'status': punchTime.hour < 9 ? 'On Time' : 'Late',
+        'lastUpdated': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (e) {
+      print('Error updating check-in status: $e');
+      _showAnimatedSnackBar("Error", "Failed to check in", Icons.error);
+    }
+  }
+
+  Future<void> _updateCheckOutStatus(DateTime punchTime, Position location) async {
+    try {
+      final formattedTime = _formatTime(punchTime);
+      String totalHours = '';
+      if (_checkInDateTime != null) {
+        Duration difference = punchTime.difference(_checkInDateTime!);
+        int hours = difference.inHours;
+        int minutes = difference.inMinutes.remainder(60);
+        totalHours = "${hours}h ${minutes}m";
+      }
+
+      await _firestore.collection('students').doc(_userId).set({
+        'isCheckedIn': false,
+        'checkOutTime': formattedTime,
+        'checkOutLocation': {
+          'latitude': location.latitude,
+          'longitude': location.longitude,
+        },
+        'totalHours': totalHours,
+        'lastUpdated': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      await _saveAttendance({
+        'checkInTime': _checkInTime ?? '--:--',
+        'checkInLocation': _checkInLocation != null
+            ? {'latitude': _checkInLocation!.latitude, 'longitude': _checkInLocation!.longitude}
+            : null,
+        'checkOutTime': formattedTime,
+        'checkOutLocation': {'latitude': location.latitude, 'longitude': location.longitude},
+        'totalHours': totalHours,
+        'date': punchTime,
+        'status': _checkInDateTime != null && _checkInDateTime!.hour < 9 ? 'On Time' : 'Late',
+      });
+    } catch (e) {
+      print('Error updating check-out status: $e');
+      _showAnimatedSnackBar("Error", "Failed to check out", Icons.error);
+    }
+  }
+
   void _handleCheckIn(DateTime punchTime) async {
     HapticFeedback.mediumImpact();
-    final formattedTime = _formatTime(punchTime);
     _checkInLocation = await _getCurrentLocation();
+
+    await _updateCheckInStatus(punchTime, _checkInLocation!);
 
     setState(() {
       _isCheckedIn = true;
       _checkInDateTime = punchTime;
-      _checkInTime = formattedTime;
+      _checkInTime = _formatTime(punchTime);
       _checkOutTime = null;
       _totalHours = null;
       _isShowingBottomSheet = false;
       _isBlurred = false;
     });
-    _showAnimatedSnackBar("Check-in successful", "Checked in at $formattedTime", Icons.check_circle_rounded);
+    _showAnimatedSnackBar("Check-in successful", "Checked in at $_checkInTime", Icons.check_circle_rounded);
   }
 
   void _handleCheckOut(DateTime punchTime) async {
     HapticFeedback.mediumImpact();
-    final formattedTime = _formatTime(punchTime);
     _checkOutLocation = await _getCurrentLocation();
-    String totalHours = '';
-    if (_checkInDateTime != null) {
-      Duration difference = punchTime.difference(_checkInDateTime!);
-      int hours = difference.inHours;
-      int minutes = difference.inMinutes.remainder(60);
-      totalHours = "${hours}h ${minutes}m";
-    }
 
-    final attendanceRecord = {
-      'checkInTime': _checkInTime ?? '--:--',
-      'checkInLocation': _checkInLocation != null
-          ? {'latitude': _checkInLocation!.latitude, 'longitude': _checkInLocation!.longitude}
-          : null,
-      'checkOutTime': formattedTime,
-      'checkOutLocation': _checkOutLocation != null
-          ? {'latitude': _checkOutLocation!.latitude, 'longitude': _checkOutLocation!.longitude}
-          : null,
-      'totalHours': totalHours,
-      'date': punchTime,
-      'status': _checkInDateTime != null && _checkInDateTime!.hour < 9 ? 'On Time' : 'Late',
-      'notes': '',
-      'breaks': [],
-    };
-
-    await _saveAttendance(attendanceRecord);
+    await _updateCheckOutStatus(punchTime, _checkOutLocation!);
 
     setState(() {
-      _checkOutTime = formattedTime;
-      _totalHours = totalHours;
+      _checkOutTime = _formatTime(punchTime);
+      _totalHours = _totalHours;
       _isCheckedIn = false;
       _checkInDateTime = null;
       _isShowingBottomSheet = false;
@@ -196,7 +247,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
       _checkInLocation = null;
       _checkOutLocation = null;
     });
-    _showAnimatedSnackBar("Check-out successful", "Total hours: $totalHours", Icons.access_time_filled_rounded);
+    _showAnimatedSnackBar("Check-out successful", "Total hours: $_totalHours", Icons.access_time_filled_rounded);
   }
 
   String _formatTime(DateTime time) {
@@ -276,7 +327,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent, // Correct parameter
+      backgroundColor: Colors.transparent,
       barrierColor: Colors.black.withOpacity(0.5),
       builder: (context) => LocationBottomSheet(
         onPunchIn: _handleCheckIn,

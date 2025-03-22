@@ -665,7 +665,7 @@ class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> wit
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.login, size: 19), // Smaller icon
+                            Icon(Icons.login, size: 16), // Smaller icon
                             const SizedBox(width: 6), // Tight spacing
                             const Text('Logged In'),
                           ],

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:smartt_attendance/screen/FriendRequestPage.dart';
 import 'package:smartt_attendance/screen/attendance-screen.dart';
 import 'package:smartt_attendance/screen/employeslist.dart';
 import 'package:smartt_attendance/screen/history.dart';
@@ -22,7 +23,7 @@ class _AdminBottomNavState extends State<AdminBottomNav> {
   final List<Widget> _pages = [
      AdminDashboard(),
      EmployeeAttendanceScreen(),
-    TeacherAdminPanel(),
+    FriendRequestPage(),
   ];
 
   void _onItemTapped(int index) {
