@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:geocoding/geocoding.dart';
+import 'package:intl/intl.dart'; // Add this import for DateFormat
 
 class EmployeeAttendanceScreen extends StatefulWidget {
   @override
@@ -13,132 +16,27 @@ class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> wit
   int _currentTabIndex = 0;
   TabController? _tabController;
 
+  // Firebase instances
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  late String _userId;
 
+  // Data for tabs
+  List<Map<String, dynamic>> _loggedInData = [];
+  List<Map<String, dynamic>> _onTimeData = [];
+  List<Map<String, dynamic>> _lateData = [];
+  bool _isLoading = true;
 
-  // Three different data sets for each tab
-  final List<List<Map<String, dynamic>>> _tabData = [
-    // Logged In
-    [
-      {
-        'name': 'Brett Johnson',
-        'position': 'UI Designer',
-        'status': 'Regular',
-        'loginTime': '9:18 AM',
-        'logoutTime': '-',
-        'attendance': 'Late',
-        'avatar': Colors.blue[200],
-      },
-      {
-        'name': 'Brett Johnson',
-        'position': 'Software Engineer',
-        'status': 'Regular',
-        'loginTime': '9:15 AM',
-        'logoutTime': '-',
-        'attendance': 'Late',
-        'avatar': Colors.purple[200],
-      },
-      {
-        'name': 'Rhodes Peter',
-        'position': 'Project Manager',
-        'status': 'Regular',
-        'loginTime': '9:05 AM',
-        'logoutTime': '-',
-        'attendance': 'Late',
-        'avatar': Colors.orange[200],
-      },
-      {
-        'name': 'Jeff Jane',
-        'position': 'HR Head',
-        'status': 'Regular',
-        'loginTime': '9:00 AM',
-        'logoutTime': '-',
-        'attendance': 'Ontime',
-        'avatar': Colors.green[200],
-      },
-      {
-        'name': 'Emily Butler',
-        'position': 'Data Scientist',
-        'status': 'Vendor',
-        'loginTime': '8:55 AM',
-        'logoutTime': '-',
-        'attendance': 'Ontime',
-        'avatar': Colors.red[200],
-      }
-    ],
-    // On Time
-    [
-      {
-        'name': 'Jeff Jane',
-        'position': 'HR Head',
-        'status': 'Regular',
-        'loginTime': '9:00 AM',
-        'logoutTime': '-',
-        'attendance': 'Ontime',
-        'avatar': Colors.green[200],
-      },
-      {
-        'name': 'Emily Butler',
-        'position': 'Data Scientist',
-        'status': 'Vendor',
-        'loginTime': '8:55 AM',
-        'logoutTime': '-',
-        'attendance': 'Ontime',
-        'avatar': Colors.red[200],
-      },
-      {
-        'name': 'Michael Smith',
-        'position': 'Frontend Developer',
-        'status': 'Regular',
-        'loginTime': '8:50 AM',
-        'logoutTime': '-',
-        'attendance': 'Ontime',
-        'avatar': Colors.teal[200],
-      },
-      {
-        'name': 'Sarah Wilson',
-        'position': 'UX Researcher',
-        'status': 'Regular',
-        'loginTime': '8:45 AM',
-        'logoutTime': '-',
-        'attendance': 'Ontime',
-        'avatar': Colors.amber[200],
-      }
-    ],
-    // Late
-    [
-      {
-        'name': 'Brett Johnson',
-        'position': 'UI Designer',
-        'status': 'Regular',
-        'loginTime': '9:18 AM',
-        'logoutTime': '-',
-        'attendance': 'Late',
-        'avatar': Colors.blue[200],
-      },
-      {
-        'name': 'Brett Johnson',
-        'position': 'Software Engineer',
-        'status': 'Regular',
-        'loginTime': '9:15 AM',
-        'logoutTime': '-',
-        'attendance': 'Late',
-        'avatar': Colors.purple[200],
-      },
-      {
-        'name': 'Rhodes Peter',
-        'position': 'Project Manager',
-        'status': 'Regular',
-        'loginTime': '9:05 AM',
-        'logoutTime': '-',
-        'attendance': 'Late',
-        'avatar': Colors.orange[200],
-      },
-    ],
-  ];
+  // Job statistics for the department sheet
+  Map<String, Map<String, dynamic>> _jobStats = {};
 
   @override
   void initState() {
     super.initState();
+    _userId = _auth.currentUser?.uid ?? '';
+    if (_userId.isEmpty) {
+      print('No user is currently signed in.');
+    }
     _tabController = TabController(length: 3, vsync: this);
     _tabController!.addListener(() {
       if (!_tabController!.indexIsChanging) {
@@ -147,12 +45,213 @@ class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> wit
         });
       }
     });
+    _fetchAttendanceData();
   }
 
   @override
   void dispose() {
     _tabController?.dispose();
     super.dispose();
+  }
+
+  Future<String> _getAddressFromCoordinates(double latitude, double longitude) async {
+    try {
+      List<Placemark> placemarks = await placemarkFromCoordinates(latitude, longitude);
+      if (placemarks.isNotEmpty) {
+        Placemark placemark = placemarks.first;
+        String street = placemark.street ?? 'Unknown location';
+        return street.isNotEmpty ? street : 'Unknown location';
+      }
+    } catch (e) {
+      print('Error decoding coordinates: $e');
+    }
+    return 'Unknown location';
+  }
+
+  Future<void> _fetchAttendanceData() async {
+    try {
+      setState(() => _isLoading = true);
+
+      // Step 1: Fetch the current teacher's friends subcollection
+      QuerySnapshot friendsSnapshot = await _firestore
+          .collection('teachers')
+          .doc(_userId)
+          .collection('friends')
+          .get();
+
+      if (friendsSnapshot.docs.isEmpty) {
+        print('No friends found for teacher: $_userId');
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      // Extract friend UIDs from the subcollection
+      List<String> friendUids = friendsSnapshot.docs
+          .map((doc) => doc.get('friendId') as String)
+          .toList();
+
+      // Step 2: Fetch attendance details for each friend from the 'students' collection
+      List<Map<String, dynamic>> loggedInList = [];
+      List<Map<String, dynamic>> onTimeList = [];
+      List<Map<String, dynamic>> lateList = [];
+
+      // Initialize job statistics
+      Map<String, Map<String, dynamic>> jobStats = {};
+
+      for (String friendUid in friendUids) {
+        DocumentSnapshot studentDoc = await _firestore.collection('students').doc(friendUid).get();
+        if (studentDoc.exists) {
+          final data = studentDoc.data() as Map<String, dynamic>;
+          String job = data['job'] ?? 'Student';
+
+          // Initialize stats for this job if not already present
+          if (!jobStats.containsKey(job)) {
+            jobStats[job] = {
+              'total': 0,
+              'onTime': 0,
+              'late': 0,
+              'leave': 0, // We'll assume 'leave' if the student is not checked in
+            };
+          }
+
+          // Increment total count for this job
+          jobStats[job]!['total'] = (jobStats[job]!['total'] as int) + 1;
+
+          bool isCheckedIn = data['isCheckedIn'] ?? false;
+          if (isCheckedIn) {
+            // Extract check-in location and decode it
+            String location = 'Not specified';
+            if (data['checkInLocation'] != null) {
+              double latitude = data['checkInLocation']['latitude']?.toDouble() ?? 0.0;
+              double longitude = data['checkInLocation']['longitude']?.toDouble() ?? 0.0;
+              if (latitude != 0.0 && longitude != 0.0) {
+                location = await _getAddressFromCoordinates(latitude, longitude);
+              }
+            }
+
+            // Format the check-in time to show only the time (e.g., "14:42")
+            String loginTime = '--:--';
+            if (data['checkInTime'] != null) {
+              Timestamp checkInTimestamp = data['checkInTime'] as Timestamp;
+              DateTime checkInDateTime = checkInTimestamp.toDate();
+              loginTime = DateFormat('HH:mm').format(checkInDateTime); // Format to show only time
+            }
+
+            // Prepare employee data
+            Map<String, dynamic> employee = {
+              'name': data['name'] ?? 'Unknown',
+              'position': job,
+              'status': 'Regular',
+              'loginTime': loginTime, // Use the formatted time
+              'attendance': data['status'] ?? 'Unknown',
+              'avatar': _getAvatarColor(data['name']),
+              'location': location,
+            };
+
+            // Add to Logged In list
+            loggedInList.add(employee);
+
+            // Update job stats based on attendance
+            if (employee['attendance'] == 'On Time') {
+              jobStats[job]!['onTime'] = (jobStats[job]!['onTime'] as int) + 1;
+              onTimeList.add(employee);
+            } else if (employee['attendance'] == 'Late') {
+              jobStats[job]!['late'] = (jobStats[job]!['late'] as int) + 1;
+              lateList.add(employee);
+            }
+          } else {
+            // If not checked in, assume they are on leave
+            jobStats[job]!['leave'] = (jobStats[job]!['leave'] as int) + 1;
+          }
+        }
+      }
+
+      setState(() {
+        _loggedInData = loggedInList;
+        _onTimeData = onTimeList;
+        _lateData = lateList;
+        _jobStats = jobStats;
+        _isLoading = false;
+      });
+    } catch (e) {
+      print('Error fetching attendance data: $e');
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Color _getAvatarColor(String? name) {
+    if (name == null) return Colors.grey[400]!;
+    int hash = name.hashCode;
+    List<Color> colors = [
+      Colors.blue[200]!,
+      Colors.purple[200]!,
+      Colors.orange[200]!,
+      Colors.green[200]!,
+      Colors.red[200]!,
+      Colors.teal[200]!,
+      Colors.amber[200]!,
+    ];
+    return colors[hash % colors.length];
+  }
+
+  // Helper method to map jobs to department names, icons, and colors
+  Map<String, dynamic> _getDepartmentDetails(String job) {
+    switch (job.toLowerCase()) {
+      case 'software engineer':
+        return {
+          'title': 'Development',
+          'icon': Icons.code,
+          'iconColor': Colors.purple,
+        };
+      case 'designer':
+        return {
+          'title': 'Design',
+          'icon': Icons.design_services,
+          'iconColor': Colors.blue,
+        };
+      case 'data scientist':
+        return {
+          'title': 'Data Science',
+          'icon': Icons.analytics,
+          'iconColor': Colors.green,
+        };
+      case 'sales representative':
+        return {
+          'title': 'Sales',
+          'icon': Icons.people,
+          'iconColor': Colors.orange,
+        };
+      case 'customer support':
+        return {
+          'title': 'Customer Support',
+          'icon': Icons.support_agent,
+          'iconColor': Colors.red,
+        };
+      case 'finance manager':
+        return {
+          'title': 'Finance',
+          'icon': Icons.money,
+          'iconColor': Colors.green,
+        };
+      case 'hr manager':
+        return {
+          'title': 'HR',
+          'icon': Icons.person,
+          'iconColor': Colors.deepPurple,
+        };
+      case 'marketing specialist':
+        return {
+          'title': 'Marketing',
+          'icon': Icons.shopping_cart,
+          'iconColor': Colors.amber,
+        };
+      default:
+        return {
+          'title': job,
+          'icon': Icons.work,
+          'iconColor': Colors.teal,
+        };
+    }
   }
 
   void _showDepartmentSheet() {
@@ -166,6 +265,12 @@ class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> wit
           minChildSize: 0.5,
           maxChildSize: 0.9,
           builder: (_, scrollController) {
+            // Calculate "All Departments" stats
+            int totalAll = _jobStats.values.fold(0, (sum, stats) => sum + (stats['total'] as int));
+            int onTimeAll = _jobStats.values.fold(0, (sum, stats) => sum + (stats['onTime'] as int));
+            int lateAll = _jobStats.values.fold(0, (sum, stats) => sum + (stats['late'] as int));
+            int leaveAll = _jobStats.values.fold(0, (sum, stats) => sum + (stats['leave'] as int));
+
             return Container(
               decoration: BoxDecoration(
                 color: Colors.white,
@@ -181,7 +286,6 @@ class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> wit
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Drag handle
                   Container(
                     margin: EdgeInsets.only(top: 12),
                     width: 40,
@@ -191,8 +295,6 @@ class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> wit
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
-
-                  // Header
                   Padding(
                     padding: const EdgeInsets.only(top: 20, bottom: 16),
                     child: Row(
@@ -205,7 +307,7 @@ class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> wit
                         ),
                         SizedBox(width: 8),
                         Text(
-                          _selectedDepartment != null ? _selectedDepartment! : 'Select Department',
+                          _selectedDepartment != 'Select Department' ? _selectedDepartment : 'Select Department',
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
@@ -215,10 +317,7 @@ class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> wit
                       ],
                     ),
                   ),
-
                   Divider(thickness: 1, height: 1),
-
-                  // Department attendance cards grid - expanded with more cards
                   Expanded(
                     child: GridView.count(
                       controller: scrollController,
@@ -228,15 +327,15 @@ class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> wit
                       crossAxisSpacing: 12,
                       mainAxisSpacing: 12,
                       children: [
-                        // All Departments Card
+                        // "All Departments" card
                         _buildDepartmentCard(
                           icon: Icons.corporate_fare,
                           iconColor: Colors.teal,
                           title: 'All Departments',
-                          total: 150,
-                          onTime: 108,
-                          late: 35,
-                          leave: 7,
+                          total: totalAll,
+                          onTime: onTimeAll,
+                          late: lateAll,
+                          leave: leaveAll,
                           onTap: () {
                             setState(() {
                               _selectedDepartment = 'All Departments';
@@ -244,128 +343,28 @@ class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> wit
                             Navigator.pop(context);
                           },
                         ),
-                        // Original cards
-                        _buildDepartmentCard(
-                          icon: Icons.design_services,
-                          iconColor: Colors.blue,
-                          title: 'Design',
-                          total: 23,
-                          onTime: 18,
-                          late: 4,
-                          leave: 1,
-                          onTap: () {
-                            setState(() {
-                              _selectedDepartment = 'Design';
-                            });
-                            Navigator.pop(context);
-                          },
-                        ),
-                        _buildDepartmentCard(
-                          icon: Icons.code,
-                          iconColor: Colors.purple,
-                          title: 'Development',
-                          total: 60,
-                          onTime: 40,
-                          late: 18,
-                          leave: 2,
-                          onTap: () {
-                            setState(() {
-                              _selectedDepartment = 'Development';
-                            });
-                            Navigator.pop(context);
-                          },
-                        ),
-                        _buildDepartmentCard(
-                          icon: Icons.analytics,
-                          iconColor: Colors.green,
-                          title: 'Data Science',
-                          total: 28,
-                          onTime: 20,
-                          late: 8,
-                          leave: 0,
-                          onTap: () {
-                            setState(() {
-                              _selectedDepartment = 'Data Science';
-                            });
-                            Navigator.pop(context);
-                          },
-                        ),
-                        _buildDepartmentCard(
-                          icon: Icons.people,
-                          iconColor: Colors.orange,
-                          title: 'Sales',
-                          total: 12,
-                          onTime: 7,
-                          late: 5,
-                          leave: 0,
-                          onTap: () {
-                            setState(() {
-                              _selectedDepartment = 'Sales';
-                            });
-                            Navigator.pop(context);
-                          },
-                        ),
-                        // Additional cards from the list
-                        _buildDepartmentCard(
-                          icon: Icons.support_agent,
-                          iconColor: Colors.red,
-                          title: 'Customer Support',
-                          total: 18,
-                          onTime: 15,
-                          late: 2,
-                          leave: 1,
-                          onTap: () {
-                            setState(() {
-                              _selectedDepartment = 'Customer Support';
-                            });
-                            Navigator.pop(context);
-                          },
-                        ),
-                        _buildDepartmentCard(
-                          icon: Icons.money,
-                          iconColor: Colors.green,
-                          title: 'Finance',
-                          total: 9,
-                          onTime: 8,
-                          late: 1,
-                          leave: 0,
-                          onTap: () {
-                            setState(() {
-                              _selectedDepartment = 'Finance';
-                            });
-                            Navigator.pop(context);
-                          },
-                        ),
-                        _buildDepartmentCard(
-                          icon: Icons.person,
-                          iconColor: Colors.deepPurple,
-                          title: 'HR',
-                          total: 7,
-                          onTime: 7,
-                          late: 0,
-                          leave: 0,
-                          onTap: () {
-                            setState(() {
-                              _selectedDepartment = 'HR';
-                            });
-                            Navigator.pop(context);
-                          },
-                        ),
-                        _buildDepartmentCard(
-                          icon: Icons.shopping_cart,
-                          iconColor: Colors.amber,
-                          title: 'Marketing',
-                          total: 14,
-                          onTime: 10,
-                          late: 3,
-                          leave: 1,
-                          onTap: () {
-                            setState(() {
-                              _selectedDepartment = 'Marketing';
-                            });
-                            Navigator.pop(context);
-                          },
-                        ),
+                        // Dynamically generate cards for each job
+                        ..._jobStats.entries.map((entry) {
+                          String job = entry.key;
+                          Map<String, dynamic> stats = entry.value;
+                          Map<String, dynamic> deptDetails = _getDepartmentDetails(job);
+
+                          return _buildDepartmentCard(
+                            icon: deptDetails['icon'],
+                            iconColor: deptDetails['iconColor'],
+                            title: deptDetails['title'],
+                            total: stats['total'],
+                            onTime: stats['onTime'],
+                            late: stats['late'],
+                            leave: stats['leave'],
+                            onTap: () {
+                              setState(() {
+                                _selectedDepartment = deptDetails['title'];
+                              });
+                              Navigator.pop(context);
+                            },
+                          );
+                        }).toList(),
                       ],
                     ),
                   ),
@@ -378,7 +377,6 @@ class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> wit
     );
   }
 
-// Updated _buildDepartmentCard to include onTap functionality
   Widget _buildDepartmentCard({
     required IconData icon,
     required Color iconColor,
@@ -408,11 +406,9 @@ class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> wit
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            // Top section with Total and status metrics
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Total number (left side, large)
                 Expanded(
                   flex: 6,
                   child: Column(
@@ -437,15 +433,11 @@ class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> wit
                     ],
                   ),
                 ),
-
-                // Vertical divider between Total and status metrics
                 Container(
                   height: 70,
                   width: 1,
                   color: Colors.grey[200],
                 ),
-
-                // Status metrics (right side)
                 Expanded(
                   flex: 8,
                   child: Padding(
@@ -453,7 +445,6 @@ class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> wit
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // On-time
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -476,8 +467,6 @@ class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> wit
                           ],
                         ),
                         Divider(height: 8, thickness: 0.5, color: Colors.grey[200]),
-
-                        // Late
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -500,8 +489,6 @@ class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> wit
                           ],
                         ),
                         Divider(height: 8, thickness: 0.5, color: Colors.grey[200]),
-
-                        // Leave
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -529,12 +516,10 @@ class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> wit
                 ),
               ],
             ),
-            // Horizontal divider before department info
             Padding(
               padding: EdgeInsets.symmetric(vertical: 8),
               child: Divider(height: 1, thickness: 0.5, color: Colors.grey[200]),
             ),
-            // Department name and icon at bottom
             Row(
               children: [
                 Icon(
@@ -563,7 +548,7 @@ class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> wit
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar:  AppBar(
+      appBar: AppBar(
         title: const Text('Departments', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22, color: Colors.white)),
         centerTitle: true,
         shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(bottom: Radius.circular(20))),
@@ -596,7 +581,6 @@ class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> wit
             child: Column(
               mainAxisAlignment: MainAxisAlignment.start,
               children: [
-                // Department Selector
                 InkWell(
                   onTap: _showDepartmentSheet,
                   borderRadius: BorderRadius.circular(8),
@@ -634,68 +618,23 @@ class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> wit
                     ),
                   ),
                 ),
-
-                // Tabs
                 Container(
                   margin: EdgeInsets.symmetric(vertical: 18),
-                  decoration: BoxDecoration(
-                    border: Border(
-                      bottom: BorderSide(
-                        color: Colors.white!,
-                        width: 0,
-                      ),
-                    ),
-                  ),
                   child: TabBar(
                     controller: _tabController,
-                    indicatorColor: Colors.black, // Simple, bold indicator
-                    indicatorWeight: 2, // Thinner for minimalism
-                    labelColor: Colors.black, // Neutral, minimalist color
-                    unselectedLabelColor: Colors.grey[600], // Soft grey for contrast
-                    labelStyle: const TextStyle(
-                      fontWeight: FontWeight.w500,
-                      fontSize: 16,
-                    ),
-                    unselectedLabelStyle: const TextStyle(
-                      fontWeight: FontWeight.w400,
-                      fontSize: 13,
-                    ),
+                    indicatorColor: Colors.black,
+                    indicatorWeight: 2,
+                    labelColor: Colors.black,
+                    unselectedLabelColor: Colors.grey[600],
+                    labelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 16),
+                    unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w400, fontSize: 13),
                     tabs: [
-                      Tab(
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.login, size: 16), // Smaller icon
-                            const SizedBox(width: 6), // Tight spacing
-                            const Text('Logged In'),
-                          ],
-                        ),
-                      ),
-                      Tab(
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.table_chart_sharp, size: 16),
-                            const SizedBox(width: 6),
-                            const Text('On Time'),
-                          ],
-                        ),
-                      ),
-                      Tab(
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.schedule, size: 14),
-                            const SizedBox(width: 6),
-                            const Text('Late (30)'),
-                          ],
-                        ),
-                      ),
+                      Tab(child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.login, size: 16), SizedBox(width: 6), Text('Logged In')])),
+                      Tab(child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.table_chart_sharp, size: 16), SizedBox(width: 6), Text('On Time')])),
+                      Tab(child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.schedule, size: 14), SizedBox(width: 6), Text('Late')])),
                     ],
                   ),
                 ),
-
-                // Search Bar
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16.0),
                   child: AnimatedContainer(
@@ -797,229 +736,16 @@ class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> wit
                   ),
                 ),
                 SizedBox(height: 16),
-
-                // Employee List - TabBarView with different content for each tab
                 Expanded(
-                  child: TabBarView(
+                  child: _isLoading
+                      ? Center(child: CircularProgressIndicator())
+                      : TabBarView(
                     controller: _tabController,
-                    children: [0, 1, 2].map((tabIndex) {
-                      return ListView.builder(
-                        padding: EdgeInsets.symmetric(horizontal: 12),
-                        itemCount: _tabData[tabIndex].length,
-                        itemBuilder: (context, index) {
-                          final employee = _tabData[tabIndex][index];
-                          final bool isLate = employee['attendance'] == 'Late';
-
-                          return Card(
-                            color: Colors.white,
-                            shadowColor:  Colors.black26,
-
-                            elevation: 5,
-                            margin: EdgeInsets.only(bottom: 12),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              side: BorderSide(color: Colors.grey[100]!),
-                            ),
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(8),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.grey.withOpacity(0.1),
-                                    spreadRadius: 1,
-                                    blurRadius: 4,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ],
-                              ),
-                              child: Padding(
-                                padding: const EdgeInsets.all(12.0),
-                                child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    // Avatar Section
-                                    Container(
-                                      width: 48, // 2 * radius to match the original CircleAvatar size
-                                      height: 58,
-                                      decoration: BoxDecoration(
-                                        color: employee['avatar'] ?? Colors.grey[400],
-                                        borderRadius: BorderRadius.circular(8), // Optional: adjust for rounded corners, set to 0 for sharp edges
-                                      ),
-                                      child: Center(
-                                        child: Text(
-                                          employee['name']?.substring(0, 1) ?? '?',
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 18,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-
-                                    // Employee Information Section
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          // Name
-                                          Text(
-                                            employee['name'] ?? 'Unknown Employee',
-                                            style: const TextStyle(
-                                              fontWeight: FontWeight.w600,
-                                              color: Colors.black87,
-                                              fontSize: 16,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 8),
-
-                                          // Position and Status
-                                          Row(
-                                            children: [
-                                              Icon(
-                                                _getPositionIcon(employee['position']),
-                                                size: 16,
-                                                color: Colors.grey[600],
-                                              ),
-                                              const SizedBox(width: 6),
-                                              Text(
-                                                '${employee['position'] ?? 'N/A'} | ${employee['status'] ?? 'N/A'}',
-                                                style: TextStyle(
-                                                  color: Colors.grey[800],
-                                                  fontSize: 14,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          const SizedBox(height: 12),
-
-                                          // Location
-                                          Row(
-                                            children: [
-                                              Icon(
-                                                Icons.location_on,
-                                                size: 12,
-                                                color: Colors.grey[600],
-                                              ),
-                                              const SizedBox(width: 6),
-                                              Expanded(
-                                                child: Text(
-                                                  'Location: ${employee['location'] ?? 'Not specified'}',
-                                                  style: TextStyle(
-                                                    color: Colors.grey[700],
-                                                    fontSize: 12,
-                                                  ),
-                                                  overflow: TextOverflow.ellipsis,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          const SizedBox(height: 12),
-
-                                          // Divider
-                                          Divider(
-                                            color: Colors.grey[200],
-                                            thickness: 1,
-                                            height: 5,
-                                          ),
-
-                                          // Login Info
-                                          Row(
-                                            children: [
-                                              Icon(
-                                                Icons.login,
-                                                size: 14,
-                                                color: Colors.grey[600],
-                                              ),
-                                              const SizedBox(width: 6),
-                                              Text(
-                                                'Login: ${employee['loginTime'] ?? 'Not recorded'}',
-                                                style: TextStyle(
-                                                  color: Colors.grey[700],
-                                                  fontSize: 11,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          const SizedBox(height: 8),
-
-                                          // Logout Info
-                                          Row(
-                                            children: [
-                                              Icon(
-                                                Icons.logout,
-                                                size: 14,
-                                                color: Colors.grey[600],
-                                              ),
-                                              const SizedBox(width: 6),
-                                              Text(
-                                                'Logout: ${employee['logoutTime'] ?? 'Not recorded'}',
-                                                style: TextStyle(
-                                                  color: Colors.grey[700],
-                                                  fontSize: 11,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-
-                                    // Status Indicator Section
-                                    Column(
-                                      crossAxisAlignment: CrossAxisAlignment.end,
-                                      children: [
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                          decoration: BoxDecoration(
-                                            color: isLate ? Colors.red[50] : Colors.green[50],
-                                            borderRadius: BorderRadius.circular(19),
-                                          ),
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Icon(
-                                                isLate ? Icons.schedule : Icons.check_circle,
-                                                size: 14,
-                                                color: isLate ? Colors.red[400] : Colors.green[400],
-                                              ),
-                                              const SizedBox(width: 6),
-                                              Text(
-                                                employee['attendance'] ?? 'Unknown',
-                                                style: TextStyle(
-                                                  color: isLate ? Colors.red[400] : Colors.green[400],
-                                                  fontSize: 13,
-                                                  fontWeight: FontWeight.w500,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                        // Late Time Display (only shown if isLate is true)
-                                        if (isLate)
-                                          Padding(
-                                            padding: const EdgeInsets.only(top: 6),
-                                            child: Text(
-                                              'Late by ${employee['lateDuration'] ?? 'N/A'}',
-                                              style: TextStyle(
-                                                color: Colors.red[400],
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.w400,
-                                              ),
-                                            ),
-                                          ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          );
-                        },
-                      );
-                    }).toList(),
+                    children: [
+                      _buildEmployeeList(_loggedInData),
+                      _buildEmployeeList(_onTimeData),
+                      _buildEmployeeList(_lateData),
+                    ],
                   ),
                 ),
               ],
@@ -1030,22 +756,164 @@ class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> wit
     );
   }
 
+  Widget _buildEmployeeList(List<Map<String, dynamic>> data) {
+    return ListView.builder(
+      padding: EdgeInsets.symmetric(horizontal: 12),
+      itemCount: data.length,
+      itemBuilder: (context, index) {
+        final employee = data[index];
+        final bool isLate = employee['attendance'] == 'Late';
+
+        return Card(
+          color: Colors.white,
+          shadowColor: Colors.black26,
+          elevation: 5,
+          margin: EdgeInsets.only(bottom: 12),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.grey[100]!)),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.grey.withOpacity(0.1),
+                  spreadRadius: 1,
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 48,
+                    height: 58,
+                    decoration: BoxDecoration(
+                      color: employee['avatar'],
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Center(
+                      child: Text(
+                        employee['name']?.substring(0, 1) ?? '?',
+                        style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(employee['name'], style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.black87, fontSize: 16)),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Icon(_getPositionIcon(employee['position']), size: 16, color: Colors.grey[600]),
+                            const SizedBox(width: 6),
+                            Text('${employee['position']} | ${employee['status']}', style: TextStyle(color: Colors.grey[800], fontSize: 14)),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Icon(Icons.location_on, size: 12, color: Colors.grey[600]),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                'Location: ${employee['location']}',
+                                style: TextStyle(color: Colors.grey[700], fontSize: 12),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Divider(color: Colors.grey[200], thickness: 1, height: 5),
+                        Row(
+                          children: [
+                            Icon(Icons.login, size: 14, color: Colors.grey[600]),
+                            const SizedBox(width: 6),
+                            Text('Login: ${employee['loginTime']}', style: TextStyle(color: Colors.grey[700], fontSize: 11)),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: isLate ? Colors.red[50] : Colors.green[50],
+                          borderRadius: BorderRadius.circular(19),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              isLate ? Icons.schedule : Icons.check_circle,
+                              size: 14,
+                              color: isLate ? Colors.red[400] : Colors.green[400],
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              employee['attendance'],
+                              style: TextStyle(
+                                color: isLate ? Colors.red[400] : Colors.green[400],
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (isLate)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Text(
+                            'Late by ${employee['lateDuration'] ?? 'N/A'}',
+                            style: TextStyle(
+                              color: Colors.red[400],
+                              fontSize: 12,
+                              fontWeight: FontWeight.w400,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   IconData _getPositionIcon(String position) {
     switch (position.toLowerCase()) {
-      case 'ui designer':
-        return Icons.brush;
+      case 'student':
+        return Icons.school;
       case 'software engineer':
         return Icons.code;
-      case 'project manager':
-        return Icons.assignment;
-      case 'hr head':
-        return Icons.people;
+      case 'designer':
+        return Icons.design_services;
       case 'data scientist':
         return Icons.analytics;
-      case 'frontend developer':
-        return Icons.web;
-      case 'ux researcher':
-        return Icons.search;
+      case 'sales representative':
+        return Icons.people;
+      case 'customer support':
+        return Icons.support_agent;
+      case 'finance manager':
+        return Icons.money;
+      case 'hr manager':
+        return Icons.person;
+      case 'marketing specialist':
+        return Icons.shopping_cart;
       default:
         return Icons.work;
     }

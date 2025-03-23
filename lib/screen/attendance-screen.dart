@@ -4,8 +4,7 @@ import 'dart:ui';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:geolocator/geolocator.dart';
-import '../models/bottom_sheet.dart'; // Ensure this file exists
-import 'history.dart'; // Ensure this file exists
+import '../models/bottom_sheet.dart';
 
 class AttendanceScreen extends StatefulWidget {
   const AttendanceScreen({super.key});
@@ -17,8 +16,8 @@ class AttendanceScreen extends StatefulWidget {
 class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerProviderStateMixin {
   bool _isCheckedIn = false;
   DateTime? _checkInDateTime;
-  String? _checkInTime;
-  String? _checkOutTime;
+  Timestamp? _checkInTimestamp;
+  Timestamp? _checkOutTimestamp;
   String? _totalHours;
   bool _isShowingBottomSheet = false;
   bool _isBlurred = false;
@@ -145,9 +144,12 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
         final data = userDoc.data() as Map<String, dynamic>;
         setState(() {
           _isCheckedIn = data['isCheckedIn'] ?? false;
-          _checkInTime = data['checkInTime'];
-          _checkOutTime = data['checkOutTime'];
+          _checkInTimestamp = data['checkInTime'];
+          _checkOutTimestamp = data['checkOutTime'];
           _totalHours = data['totalHours'];
+          if (_checkInTimestamp != null) {
+            _checkInDateTime = _checkInTimestamp!.toDate();
+          }
         });
       }
     } catch (e) {
@@ -157,15 +159,18 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
 
   Future<void> _updateCheckInStatus(DateTime punchTime, Position location) async {
     try {
-      final formattedTime = _formatTime(punchTime);
+      final timestamp = Timestamp.fromDate(punchTime);
       await _firestore.collection('students').doc(_userId).set({
         'isCheckedIn': true,
-        'checkInTime': formattedTime,
+        'checkInTime': timestamp, // Store as Timestamp
         'checkInLocation': {
           'latitude': location.latitude,
           'longitude': location.longitude,
         },
         'status': punchTime.hour < 9 ? 'On Time' : 'Late',
+        'checkOutTime': null,      // Reset check-out time
+        'totalHours': null,        // Reset total hours
+        'checkOutLocation': null,  // Reset check-out location
         'lastUpdated': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
     } catch (e) {
@@ -176,7 +181,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
 
   Future<void> _updateCheckOutStatus(DateTime punchTime, Position location) async {
     try {
-      final formattedTime = _formatTime(punchTime);
+      final timestamp = Timestamp.fromDate(punchTime);
       String totalHours = '';
       if (_checkInDateTime != null) {
         Duration difference = punchTime.difference(_checkInDateTime!);
@@ -187,24 +192,24 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
 
       await _firestore.collection('students').doc(_userId).set({
         'isCheckedIn': false,
-        'checkOutTime': formattedTime,
+        'checkOutTime': timestamp, // Store as Timestamp
         'checkOutLocation': {
           'latitude': location.latitude,
           'longitude': location.longitude,
         },
-        'totalHours': totalHours,
+        'totalHours': totalHours, // Update total hours
         'lastUpdated': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 
       await _saveAttendance({
-        'checkInTime': _checkInTime ?? '--:--',
+        'checkInTime': _checkInTimestamp, // Store as Timestamp
         'checkInLocation': _checkInLocation != null
             ? {'latitude': _checkInLocation!.latitude, 'longitude': _checkInLocation!.longitude}
             : null,
-        'checkOutTime': formattedTime,
+        'checkOutTime': timestamp, // Store as Timestamp
         'checkOutLocation': {'latitude': location.latitude, 'longitude': location.longitude},
         'totalHours': totalHours,
-        'date': punchTime,
+        'date': Timestamp.fromDate(punchTime),
         'status': _checkInDateTime != null && _checkInDateTime!.hour < 9 ? 'On Time' : 'Late',
       });
     } catch (e) {
@@ -222,13 +227,13 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
     setState(() {
       _isCheckedIn = true;
       _checkInDateTime = punchTime;
-      _checkInTime = _formatTime(punchTime);
-      _checkOutTime = null;
-      _totalHours = null;
+      _checkInTimestamp = Timestamp.fromDate(punchTime);
+      _checkOutTimestamp = null; // Reset in UI
+      _totalHours = null;       // Reset in UI
       _isShowingBottomSheet = false;
       _isBlurred = false;
     });
-    _showAnimatedSnackBar("Check-in successful", "Checked in at $_checkInTime", Icons.check_circle_rounded);
+    _showAnimatedSnackBar("Check-in successful", "Checked in at ${_formatTime(punchTime)}", Icons.check_circle_rounded);
   }
 
   void _handleCheckOut(DateTime punchTime) async {
@@ -237,11 +242,20 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
 
     await _updateCheckOutStatus(punchTime, _checkOutLocation!);
 
+    String totalHours = '';
+    if (_checkInDateTime != null) {
+      Duration difference = punchTime.difference(_checkInDateTime!);
+      int hours = difference.inHours;
+      int minutes = difference.inMinutes.remainder(60);
+      totalHours = "${hours}h ${minutes}m";
+    }
+
     setState(() {
-      _checkOutTime = _formatTime(punchTime);
-      _totalHours = _totalHours;
+      _checkOutTimestamp = Timestamp.fromDate(punchTime);
+      _totalHours = totalHours; // Update with calculated value
       _isCheckedIn = false;
       _checkInDateTime = null;
+      _checkInTimestamp = null;
       _isShowingBottomSheet = false;
       _isBlurred = false;
       _checkInLocation = null;
@@ -254,6 +268,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
     final hour = time.hour > 12 ? time.hour - 12 : time.hour == 0 ? 12 : time.hour;
     final amPm = time.hour >= 12 ? 'PM' : 'AM';
     return "$hour:${time.minute.toString().padLeft(2, '0')} $amPm";
+  }
+
+  String _formatTimestamp(Timestamp? timestamp) {
+    if (timestamp == null) return '--:--';
+    return _formatTime(timestamp.toDate());
   }
 
   void _showAnimatedSnackBar(String title, String message, IconData icon) {
@@ -530,11 +549,29 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          _buildStatItem(_isCheckedIn ? Icons.login_rounded : Icons.schedule_rounded, 'Check In', _checkInTime, Colors.green.shade700, 'check-in'),
+          _buildStatItem(
+            _isCheckedIn ? Icons.login_rounded : Icons.schedule_rounded,
+            'Check In',
+            _checkInTimestamp != null ? _formatTimestamp(_checkInTimestamp) : null,
+            Colors.green.shade700,
+            'check-in',
+          ),
           _buildDivider(),
-          _buildStatItem(_isCheckedIn ? Icons.logout_rounded : Icons.schedule_rounded, 'Check Out', _checkOutTime, Colors.red.shade700, 'check-out'),
+          _buildStatItem(
+            _isCheckedIn ? Icons.logout_rounded : Icons.schedule_rounded,
+            'Check Out',
+            _checkOutTimestamp != null ? _formatTimestamp(_checkOutTimestamp) : null,
+            Colors.red.shade700,
+            'check-out',
+          ),
           _buildDivider(),
-          _buildStatItem(_isCheckedIn ? Icons.timelapse_rounded : Icons.timer_rounded, 'Total', _totalHours, Colors.blue.shade700, 'total-hours'),
+          _buildStatItem(
+            _isCheckedIn ? Icons.timelapse_rounded : Icons.timer_rounded,
+            'Total',
+            _totalHours,
+            Colors.blue.shade700,
+            'total-hours',
+          ),
         ],
       ),
     );
