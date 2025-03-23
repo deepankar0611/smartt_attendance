@@ -3,7 +3,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class DeleteAccountPage extends StatefulWidget {
-  const DeleteAccountPage({Key? key}) : super(key: key);
+  final String userType; // "student" or "teacher"
+
+  const DeleteAccountPage({Key? key, required this.userType}) : super(key: key);
 
   @override
   _DeleteAccountPageState createState() => _DeleteAccountPageState();
@@ -54,7 +56,8 @@ class _DeleteAccountPageState extends State<DeleteAccountPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Confirm Deletion'),
-        content: const Text('Are you sure you want to delete your account? This action cannot be undone.'),
+        content: const Text(
+            'Are you sure you want to delete your account? This action cannot be undone.'),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
         actions: [
           TextButton(
@@ -100,11 +103,29 @@ class _DeleteAccountPageState extends State<DeleteAccountPage> {
       );
       await user.reauthenticateWithCredential(credential);
 
-      // Delete the user's Firestore data
+      // Delete the user's Firestore data based on userType
       String userId = user.uid;
-      await _firestore.collection('students').doc(userId).delete();
+      if (widget.userType == 'student') {
+        await _firestore.collection('students').doc(userId).delete();
+      } else if (widget.userType == 'teacher') {
+        // Delete the teacher's data
+        await _firestore.collection('teachers').doc(userId).delete();
+        // Optionally, delete the teacher's subcollections (e.g., friends)
+        await _firestore
+            .collection('teachers')
+            .doc(userId)
+            .collection('friends')
+            .get()
+            .then((snapshot) {
+          for (DocumentSnapshot doc in snapshot.docs) {
+            doc.reference.delete();
+          }
+        });
+      } else {
+        throw Exception('Invalid user type: ${widget.userType}');
+      }
 
-      // Delete the user account
+      // Delete the user account from Firebase Authentication
       await user.delete();
 
       // Return 'delete' to indicate success
@@ -225,7 +246,8 @@ class _DeleteAccountPageState extends State<DeleteAccountPage> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.red,
                         padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
                         elevation: 2,
                       ),
                       child: _isLoading

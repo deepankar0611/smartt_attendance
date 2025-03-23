@@ -112,7 +112,7 @@ class _SettingsPageState extends State<SettingsPage> {
   void _navigateToDeleteAccountPage() async {
     final result = await Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const DeleteAccountPage()),
+      MaterialPageRoute(builder: (context) => const DeleteAccountPage(userType: 'student',)),
     );
 
     if (result == 'delete') {

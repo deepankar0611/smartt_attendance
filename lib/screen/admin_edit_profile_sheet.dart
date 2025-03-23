@@ -28,8 +28,7 @@ class _AdminEditProfileSheetState extends State<AdminEditProfileSheet> {
   late TextEditingController _departmentController;
   late TextEditingController _locationController;
   late TextEditingController _mobileController;
-  String _selectedAdminLevel = ' Admin';
-
+  late String _selectedAdminLevel;
 
   @override
   void initState() {
@@ -68,106 +67,105 @@ class _AdminEditProfileSheetState extends State<AdminEditProfileSheet> {
           ),
         ],
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            "Edit Admin Profile",
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color:  Colors.black,
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "Edit Admin Profile",
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: Colors.black,
+              ),
             ),
-          ),
-          const SizedBox(height: 20),
-          _buildTextField(
-            controller: _nameController,
-            label: "Name",
-            icon: Icons.person,
-          ),
-          const SizedBox(height: 15),
-          _buildTextField(
-            controller: _roleController,
-            label: "Role",
-            icon: Icons.work,
-          ),
-          const SizedBox(height: 15),
-          _buildTextField(
-            controller: _departmentController,
-            label: "firm",
-            icon: Icons.apartment,
-          ),
-          const SizedBox(height: 15),
-          _buildTextField(
-            controller: _locationController,
-            label: "Location",
-            icon: Icons.location_on,
-          ),
-          const SizedBox(height: 15),
-          _buildTextField(
-            controller: _mobileController,
-            label: "Mobile Number",
-            icon: Icons.phone,
-            keyboardType: TextInputType.phone,
-          ),
-          const SizedBox(height: 15),
-
-          const SizedBox(height: 25),
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: () => Navigator.pop(context),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.grey[300],
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
+            const SizedBox(height: 20),
+            _buildTextField(
+              controller: _nameController,
+              label: "Name",
+              icon: Icons.person,
+            ),
+            const SizedBox(height: 15),
+            _buildTextField(
+              controller: _roleController,
+              label: "Role",
+              icon: Icons.work,
+            ),
+            const SizedBox(height: 15),
+            _buildTextField(
+              controller: _departmentController,
+              label: "Firm",
+              icon: Icons.apartment,
+            ),
+            const SizedBox(height: 15),
+            _buildTextField(
+              controller: _locationController,
+              label: "Location",
+              icon: Icons.location_on,
+            ),
+            const SizedBox(height: 15),
+            _buildTextField(
+              controller: _mobileController,
+              label: "Mobile Number",
+              icon: Icons.phone,
+              keyboardType: TextInputType.phone,
+            ),
+            const SizedBox(height: 25),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.grey[300],
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                     ),
-                  ),
-                  child: const Text(
-                    "Cancel",
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Colors.black87,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 15),
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: () {
-                    // Return updated values to previous screen
-                    Navigator.pop(context, {
-                      'name': _nameController.text,
-                      'role': _roleController.text,
-                      'department': _departmentController.text,
-                      'location': _locationController.text,
-                      'mobile': _mobileController.text,
-                      'adminLevel': _selectedAdminLevel,
-                    });
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor:  Colors.black,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                  child: const Text(
-                    "Save",
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Colors.white,
+                    child: const Text(
+                      "Cancel",
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: Colors.black87,
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
-          ),
-        ],
+                const SizedBox(width: 15),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.pop(context, {
+                        'name': _nameController.text,
+                        'role': _roleController.text,
+                        'department': _departmentController.text,
+                        'location': _locationController.text,
+                        'mobile': _mobileController.text,
+                        'adminLevel': _selectedAdminLevel,
+                      });
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.black,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    child: const Text(
+                      "Save",
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -183,14 +181,14 @@ class _AdminEditProfileSheetState extends State<AdminEditProfileSheet> {
       keyboardType: keyboardType,
       decoration: InputDecoration(
         labelText: label,
-        prefixIcon: Icon(icon, color:  Colors.black),
+        prefixIcon: Icon(icon, color: Colors.black),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
           borderSide: const BorderSide(color: Colors.grey),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color:  Colors.black, width: 2),
+          borderSide: const BorderSide(color: Colors.black, width: 2),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
@@ -201,6 +199,4 @@ class _AdminEditProfileSheetState extends State<AdminEditProfileSheet> {
       ),
     );
   }
-
-
-}// TODO Implement this library.
+}

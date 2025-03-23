@@ -1,14 +1,16 @@
 import 'dart:ui';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:smartt_attendance/screen/settingsheet.dart';
 import 'dart:io';
-import 'employee_list_screen.dart';
-import 'login_screen.dart';
-import 'admin_edit_profile_sheet.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:smartt_attendance/screen/login_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:intl/intl.dart';
+
+import 'FriendRequestPage.dart';
+import 'admin_edit_profile_sheet.dart';
+import 'delete_account_page.dart'; // Import intl for date formatting
 
 class AdminProfilePage extends StatefulWidget {
   final String? adminId;
@@ -31,8 +33,7 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
   String _adminLevel = "Admin";
   String _adminId = "";
   final Map<String, int> _stats = {
-    'employees': 150,
-    'total': 25,
+    'employees': 0,
     'projects': 12,
   };
 
@@ -49,21 +50,26 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
     _userId = widget.adminId ?? _auth.currentUser?.uid ?? '';
     if (_userId.isEmpty) {
       print('No user is currently signed in.');
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const LoginScreen()),
-      );
+      // Handle navigation to login screen if needed
     } else {
       _fetchAdminProfile();
-      _fetchSystemStats();
+      _fetchSummaryData();
     }
   }
 
   Future<void> _fetchAdminProfile() async {
     try {
-      DocumentSnapshot userDoc = await _firestore.collection('admins').doc(_userId).get();
+      DocumentSnapshot userDoc = await _firestore.collection('teachers').doc(_userId).get();
       if (userDoc.exists) {
         final data = userDoc.data() as Map<String, dynamic>;
+        // Format the createdAt timestamp to "dd-MM-yyyy"
+        String formattedJoinDate = "01-01-2023"; // Default value
+        if (data['createdAt'] != null) {
+          Timestamp createdAt = data['createdAt'] as Timestamp;
+          DateTime dateTime = createdAt.toDate();
+          formattedJoinDate = DateFormat('dd-MM-yyyy').format(dateTime);
+        }
+
         setState(() {
           _name = data['name'] ?? "Admin User";
           _role = data['role'] ?? "System Administrator";
@@ -71,13 +77,13 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
           _location = data['location'] ?? "Head Office";
           _mobile = data['mobile'] ?? "7479519946";
           _email = data['email'] ?? "admin@example.com";
-          _joinDate = data['joinDate'] ?? "01-01-2023";
-          _adminLevel = data['adminLevel'] ?? "Super Admin";
-          _adminId = data['adminId'] ?? "A-" + _userId.substring(0, 6);
+          _joinDate = formattedJoinDate; // Use the formatted createdAt
+          _adminLevel = data['adminLevel'] ?? "Admin";
+          _adminId = "A-" + _userId.substring(0, 6);
           _profileImageUrl = data['profileImageUrl'];
         });
       } else {
-        await _firestore.collection('admins').doc(_userId).set({
+        await _firestore.collection('teachers').doc(_userId).set({
           'name': _name,
           'role': _role,
           'department': _department,
@@ -86,7 +92,6 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
           'email': _auth.currentUser?.email ?? 'admin@example.com',
           'joinDate': _joinDate,
           'adminLevel': _adminLevel,
-          'adminId': "A-" + _userId.substring(0, 6),
           'createdAt': FieldValue.serverTimestamp(),
           'isEmailVerified': _auth.currentUser?.emailVerified ?? false,
           'profileImageUrl': null,
@@ -97,24 +102,21 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
     }
   }
 
-  Future<void> _fetchSystemStats() async {
+  Future<void> _fetchSummaryData() async {
     try {
-      final studentSnapshot = await _firestore.collection('students').count().get();
-      int? studentCount = studentSnapshot.count;
-
-      final teacherSnapshot = await _firestore.collection('teachers').count().get();
-      int? teacherCount = teacherSnapshot.count;
-
-      final courseSnapshot = await _firestore.collection('courses').count().get();
-      int? courseCount = courseSnapshot.count;
+      QuerySnapshot friendsSnapshot = await _firestore
+          .collection('teachers')
+          .doc(_userId)
+          .collection('friends')
+          .get();
+      int totalFriends = friendsSnapshot.docs.length;
+      print('Total friends fetched: $totalFriends');
 
       setState(() {
-        _stats['Students'] = studentCount!;
-        _stats['Teachers'] = teacherCount!;
-        _stats['Courses'] = courseCount!;
+        _stats['employees'] = totalFriends;
       });
     } catch (e) {
-      _showSnackBar('Error fetching system stats: $e');
+      _showSnackBar('Error fetching summary data: $e');
     }
   }
 
@@ -164,7 +166,7 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
 
       final String imageUrl = _supabase.storage.from('admin_profile_pictures').getPublicUrl(fileName);
 
-      await _firestore.collection('admins').doc(_userId).update({
+      await _firestore.collection('teachers').doc(_userId).update({
         'profileImageUrl': imageUrl,
       });
 
@@ -198,18 +200,13 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
     try {
       await FirebaseAuth.instance.signOut();
       _showSnackBar('Logged out successfully');
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (context) => const LoginScreen()),
-            (Route<dynamic> route) => false,
-      );
     } catch (e) {
       _showSnackBar('Error logging out: $e');
     }
   }
 
   void _showEditProfileSheet() async {
-    final result = await showModalBottomSheet(
+    final result = await showModalBottomSheet<Map<String, String>>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -217,9 +214,7 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
         children: [
           BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 4.0, sigmaY: 4.0),
-            child: Container(
-              color: Colors.transparent,
-            ),
+            child: Container(color: Colors.transparent),
           ),
           Center(
             child: Padding(
@@ -244,16 +239,16 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
 
     if (result != null) {
       setState(() {
-        _name = result['name'];
-        _role = result['role'];
-        _department = result['department'];
-        _location = result['location'];
-        _mobile = result['mobile'];
-        _adminLevel = result['adminLevel'];
+        _name = result['name'] ?? _name;
+        _role = result['role'] ?? _role;
+        _department = result['department'] ?? _department;
+        _location = result['location'] ?? _location;
+        _mobile = result['mobile'] ?? _mobile;
+        _adminLevel = result['adminLevel'] ?? _adminLevel;
       });
 
       try {
-        await _firestore.collection('admins').doc(_userId).update({
+        await _firestore.collection('teachers').doc(_userId).update({
           'name': _name,
           'role': _role,
           'department': _department,
@@ -268,37 +263,23 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
     }
   }
 
-  void _navigateToSettingsPage() async {
-    final result = await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const SettingsPage()),
-    );
-
-    if (result == 'update') {
-      _showSnackBar('Password updated successfully');
-    } else if (result == 'delete') {
-      try {
-        _showSnackBar('Account deleted successfully');
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (context) => const LoginScreen()),
-              (Route<dynamic> route) => false,
-        );
-      } catch (e) {
-        _showSnackBar('Error deleting account: $e');
-      }
-    }
+  void _navigateToSettingsPage() {
+    _showSnackBar('Settings feature to be implemented');
   }
 
   void _viewAuditLogs() {
     _showSnackBar('Audit logs feature will be implemented soon');
   }
 
+  void _navigateToEmployeeList() {
+    _showSnackBar('Employee list feature to be implemented');
+  }
+
   @override
   Widget build(BuildContext context) {
     const Color baseColor = Colors.green;
     final Color gradientStart = baseColor;
-    final Color gradientEnd = Color.fromRGBO(0, 255, 0, 0.8); // Previously baseColor.withOpacity(0.8)
+    final Color gradientEnd = Color.fromRGBO(0, 255, 0, 0.8);
 
     return Scaffold(
       backgroundColor: Colors.grey[100],
@@ -355,13 +336,13 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
           end: Alignment.bottomLeft,
           colors: [
             const Color(0xFF1B5E20),
-            Color.fromRGBO(27, 94, 32, 0.8), // Previously 0xFF1B5E20.withOpacity(0.8)
+            Color.fromRGBO(27, 94, 32, 0.8),
           ],
         ),
         borderRadius: const BorderRadius.vertical(bottom: Radius.circular(30)),
         boxShadow: [
           BoxShadow(
-            color: Color.fromRGBO(0, 0, 0, 0.15), // Previously Colors.black.withOpacity(0.15)
+            color: Color.fromRGBO(0, 0, 0, 0.15),
             blurRadius: 20,
             offset: const Offset(0, 10),
           ),
@@ -379,8 +360,8 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
                   shape: BoxShape.circle,
                   gradient: LinearGradient(
                     colors: [
-                      Color.fromRGBO(0, 255, 0, 0.9), // Previously gradientStart.withOpacity(0.9)
-                      Color.fromRGBO(0, 255, 0, 0.7), // Previously gradientEnd.withOpacity(0.7)
+                      Color.fromRGBO(0, 255, 0, 0.9),
+                      Color.fromRGBO(0, 255, 0, 0.7),
                     ],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
@@ -435,7 +416,7 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
             decoration: BoxDecoration(
-              color: Color.fromRGBO(0, 0, 0, 0.2), // Previously Colors.black.withOpacity(0.2)
+              color: Color.fromRGBO(0, 0, 0, 0.2),
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(
@@ -454,7 +435,7 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                 decoration: BoxDecoration(
-                  color: Color.fromRGBO(255, 255, 255, 0.2), // Previously Colors.white.withOpacity(0.2)
+                  color: Color.fromRGBO(255, 255, 255, 0.2),
                   borderRadius: BorderRadius.circular(15),
                 ),
                 child: Text(
@@ -462,7 +443,7 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: Colors.white, // Previously Colors.white.withOpacity(0.9)
+                    color: Colors.white,
                   ),
                 ),
               ),
@@ -474,7 +455,7 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w500,
-              color: Colors.white, // Previously Colors.white.withOpacity(0.9)
+              color: Colors.white,
               letterSpacing: 0.5,
             ),
           ),
@@ -482,7 +463,7 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
-              color: Color.fromRGBO(255, 255, 255, 0.1), // Previously Colors.white.withOpacity(0.1)
+              color: Color.fromRGBO(255, 255, 255, 0.1),
               borderRadius: BorderRadius.circular(15),
             ),
             child: Row(
@@ -514,7 +495,7 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Color.fromRGBO(0, 0, 0, 0.05), // Previously Colors.black.withOpacity(0.05)
+            color: Color.fromRGBO(0, 0, 0, 0.05),
             blurRadius: 10,
             offset: const Offset(0, 2),
           ),
@@ -572,7 +553,7 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Color.fromRGBO(0, 0, 0, 0.05), // Previously Colors.black.withOpacity(0.05)
+            color: Color.fromRGBO(0, 0, 0, 0.05),
             blurRadius: 10,
             offset: const Offset(0, 2),
           ),
@@ -609,15 +590,6 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
     );
   }
 
-  void _navigateToEmployeeList() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => const EmployeeListScreen(),
-      ),
-    );
-  }
-
   Widget _buildOptionsCard(Color baseColor) {
     return Column(
       children: [
@@ -626,7 +598,6 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
           label: "Edit Profile",
           onTap: _showEditProfileSheet,
         ),
-        const SizedBox(height: 12),
         const SizedBox(height: 12),
         _buildOptionButton(
           icon: Icons.history,
@@ -644,6 +615,29 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
           icon: Icons.ad_units,
           label: "Add employee",
           onTap: _navigateToEmployeeList,
+        ),
+        const SizedBox(height: 16),
+        _buildOptionButton(
+          icon: Icons.delete_forever,
+          label: "Delete Account",
+          onTap: () async {
+            // Navigate to DeleteAccountPage for teacher
+            final result = await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const DeleteAccountPage(userType: 'teacher'),
+              ),
+            );
+            if (result == 'delete') {
+              // Navigate to login screen or home screen after deletion
+              _showSnackBar('Account deleted successfully');
+              // Example: Navigate to login screen
+              Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (context) => LoginScreen()),
+              );
+            }
+          },
         ),
       ],
     );
@@ -664,7 +658,7 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
           borderRadius: BorderRadius.circular(12),
           boxShadow: [
             BoxShadow(
-              color: Color.fromRGBO(0, 0, 0, 0.2), // Previously Colors.black.withOpacity(0.2)
+              color: Color.fromRGBO(0, 0, 0, 0.2),
               blurRadius: 8,
               offset: const Offset(0, 4),
             ),
@@ -689,3 +683,4 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
     );
   }
 }
+
