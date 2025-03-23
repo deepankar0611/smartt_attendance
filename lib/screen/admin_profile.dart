@@ -28,12 +28,12 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
   String _mobile = "7479519946";
   String _email = "admin@example.com";
   String _joinDate = "01-01-2023";
-  String _adminLevel = "Super Admin";
+  String _adminLevel = "Admin";
   String _adminId = "";
   final Map<String, int> _stats = {
-    'Students': 150,
-    'Teachers': 25,
-    'Courses': 12,
+    'employees': 150,
+    'total': 25,
+    'projects': 12,
   };
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -522,7 +522,7 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
       ),
       child: Column(
         children: [
-          _buildInfoRow(Icons.business, "Department", _department),
+          _buildInfoRow(Icons.apartment, "firm", _department),
           const Divider(height: 16),
           _buildInfoRow(Icons.email, "Email", _email),
           const Divider(height: 16),

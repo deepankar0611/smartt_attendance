@@ -28,14 +28,8 @@ class _AdminEditProfileSheetState extends State<AdminEditProfileSheet> {
   late TextEditingController _departmentController;
   late TextEditingController _locationController;
   late TextEditingController _mobileController;
-  String _selectedAdminLevel = 'Super Admin';
+  String _selectedAdminLevel = ' Admin';
 
-  final List<String> _adminLevels = [
-    'Super Admin',
-    'Admin',
-    'Department Admin',
-    'Limited Admin'
-  ];
 
   @override
   void initState() {
@@ -101,8 +95,8 @@ class _AdminEditProfileSheetState extends State<AdminEditProfileSheet> {
           const SizedBox(height: 15),
           _buildTextField(
             controller: _departmentController,
-            label: "Department",
-            icon: Icons.business,
+            label: "firm",
+            icon: Icons.apartment,
           ),
           const SizedBox(height: 15),
           _buildTextField(

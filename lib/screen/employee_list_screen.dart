@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 
 class EmployeeListScreen extends StatefulWidget {
@@ -9,26 +10,28 @@ class EmployeeListScreen extends StatefulWidget {
 
 class _EmployeeListScreenState extends State<EmployeeListScreen> {
   final List<Map<String, dynamic>> _allEmployees = [
-    {'name': 'John Doe', 'role': 'Developer', 'department': 'IT', 'adminCompany': ''},
-    {'name': 'Jane Smith', 'role': 'Designer', 'department': 'Creative', 'adminCompany': ''},
-    {'name': 'Mike Johnson', 'role': 'Manager', 'department': 'Operations', 'adminCompany': ''},
-    {'name': 'Sarah Williams', 'role': 'Analyst', 'department': 'Finance', 'adminCompany': ''},
+    {'name': 'John Doe', 'role': 'Developer', 'department': 'IT', 'adminCompany': '', 'teamDepartment': ''},
+    {'name': 'Jane Smith', 'role': 'Designer', 'department': 'Creative', 'adminCompany': '', 'teamDepartment': ''},
+    {'name': 'Mike Johnson', 'role': 'Manager', 'department': 'Operations', 'adminCompany': '', 'teamDepartment': ''},
+    {'name': 'Sarah Williams', 'role': 'Analyst', 'department': 'Finance', 'adminCompany': '', 'teamDepartment': ''},
   ];
 
-  // List of available admin companies
-  final List<String> _adminCompanies = [
-    'Acme Corp',
-    'Globex Inc',
-    'Umbrella LLC',
-    'Wayne Enterprises'
+  final List<String> _teamDepartments = [
+    'Design',
+    'Development',
+    'Data Science',
+    'Marketing',
+    'Product Management',
+    'Quality Assurance',
+    'Research'
   ];
 
   List<Map<String, dynamic>> _filteredEmployees = [];
   final TextEditingController _searchController = TextEditingController();
-  bool _showFullList = false;
   String _selectedFilter = 'All';
   final List<String> _filterOptions = ['All', 'IT', 'Creative', 'Operations', 'Finance'];
   String _adminCompanyFilter = 'All';
+  String _teamDepartmentFilter = 'All';
 
   @override
   void initState() {
@@ -51,10 +54,12 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
         final role = employee['role']?.toLowerCase() ?? '';
         final department = employee['department']?.toLowerCase() ?? '';
         final adminCompany = employee['adminCompany']?.toLowerCase() ?? '';
+        final teamDepartment = employee['teamDepartment']?.toLowerCase() ?? '';
 
         bool matchesSearch = name.contains(query) ||
             role.contains(query) ||
-            department.contains(query);
+            department.contains(query) ||
+            teamDepartment.contains(query);
 
         bool matchesDepartmentFilter = _selectedFilter == 'All' ||
             department == _selectedFilter.toLowerCase();
@@ -63,11 +68,14 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
             adminCompany == _adminCompanyFilter.toLowerCase() ||
             (_adminCompanyFilter == 'None' && adminCompany.isEmpty);
 
-        return matchesSearch && matchesDepartmentFilter && matchesAdminCompany;
+        bool matchesTeamDepartment = _teamDepartmentFilter == 'All' ||
+            teamDepartment == _teamDepartmentFilter.toLowerCase() ||
+            (_teamDepartmentFilter == 'None' && teamDepartment.isEmpty);
+
+        return matchesSearch && matchesDepartmentFilter && matchesAdminCompany && matchesTeamDepartment;
       }).toList();
     });
   }
-
 
   void _setDepartmentFilter(String filter) {
     setState(() {
@@ -76,26 +84,24 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
     });
   }
 
-  void _setAdminCompanyFilter(String filter) {
+  void _setTeamDepartmentFilter(String filter) {
     setState(() {
-      _adminCompanyFilter = filter;
+      _teamDepartmentFilter = filter;
       _filterEmployees();
     });
   }
 
-  void _assignAdminCompany(int employeeIndex, String company) {
+  void _assignTeamDepartment(int employeeIndex, String teamDepartment) {
     setState(() {
-      // Find the actual index in the full list
       final employeeData = _filteredEmployees[employeeIndex];
       final fullListIndex = _allEmployees.indexWhere((e) =>
       e['name'] == employeeData['name'] &&
           e['role'] == employeeData['role'] &&
-          e['department'] == employeeData['department']
-      );
+          e['department'] == employeeData['department']);
 
       if (fullListIndex >= 0) {
-        _allEmployees[fullListIndex]['adminCompany'] = company;
-        _filteredEmployees[employeeIndex]['adminCompany'] = company;
+        _allEmployees[fullListIndex]['teamDepartment'] = teamDepartment;
+        _filteredEmployees[employeeIndex]['teamDepartment'] = teamDepartment;
       }
     });
   }
@@ -107,17 +113,11 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
       appBar: AppBar(
         title: const Text(
           'Employees',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 22,
-            color: Colors.white,
-          ),
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22, color: Colors.white),
         ),
         centerTitle: true,
         elevation: 0,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
-        ),
+        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(bottom: Radius.circular(20))),
         flexibleSpace: Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
@@ -141,7 +141,6 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Enhanced search section with shadow and better spacing
           Container(
             margin: const EdgeInsets.fromLTRB(16, 20, 16, 8),
             decoration: BoxDecoration(
@@ -149,9 +148,8 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
+                  color: Colors.black.withAlpha(13),
                   blurRadius: 10,
-                  spreadRadius: 0,
                   offset: const Offset(0, 4),
                 ),
               ],
@@ -160,15 +158,8 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
               controller: _searchController,
               decoration: InputDecoration(
                 hintText: 'Search employees...',
-                hintStyle: TextStyle(
-                  color: Colors.grey[400],
-                  fontSize: 16,
-                ),
-                prefixIcon: Icon(
-                  Icons.search,
-                  color: Colors.green[700],
-                  size: 22,
-                ),
+                hintStyle: TextStyle(color: Colors.grey[400], fontSize: 16),
+                prefixIcon: Icon(Icons.search, color: Colors.green[700], size: 22),
                 suffixIcon: _searchController.text.isNotEmpty
                     ? IconButton(
                   icon: const Icon(Icons.clear, size: 18),
@@ -183,8 +174,6 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
               ),
             ),
           ),
-
-          // Department filter chips
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -208,17 +197,13 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
                     ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(20),
-                      side: BorderSide(
-                        color: isSelected ? Colors.green[800]! : Colors.grey[300]!,
-                      ),
+                      side: BorderSide(color: isSelected ? Colors.green[800]! : Colors.grey[300]!),
                     ),
                   ),
                 );
               }).toList(),
             ),
           ),
-
-          // Counter and results info
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
             child: Row(
@@ -226,41 +211,30 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
               children: [
                 Text(
                   '${_filteredEmployees.length} employees found',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey[600],
-                    fontWeight: FontWeight.w500,
-                  ),
+                  style: TextStyle(fontSize: 14, color: Colors.grey[600], fontWeight: FontWeight.w500),
                 ),
-                if (_adminCompanyFilter != 'All')
+                if (_teamDepartmentFilter != 'All')
                   Container(
+                    margin: const EdgeInsets.only(left: 8),
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: Colors.green[50],
+                      color: Colors.blue[50],
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.green[300]!),
+                      border: Border.all(color: Colors.blue[300]!),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          'Admin: $_adminCompanyFilter',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.green[800],
-                            fontWeight: FontWeight.w500,
-                          ),
+                          'Team: $_teamDepartmentFilter',
+                          style: TextStyle(fontSize: 12, color: Colors.blue[800], fontWeight: FontWeight.w500),
                         ),
                         const SizedBox(width: 4),
                         GestureDetector(
                           onTap: () {
-                            _setAdminCompanyFilter('All');
+                            _setTeamDepartmentFilter('All');
                           },
-                          child: Icon(
-                            Icons.close,
-                            size: 14,
-                            color: Colors.green[800],
-                          ),
+                          child: Icon(Icons.close, size: 14, color: Colors.blue[800]),
                         ),
                       ],
                     ),
@@ -268,122 +242,113 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
               ],
             ),
           ),
-          Expanded(
-            child: _buildEmployeeList(),
-          ),
+          Expanded(child: _buildEmployeeList()),
         ],
       ),
     );
   }
+
   void _showFilterBottomSheet(BuildContext context) {
-    // Create a list with 'All', 'None', and all admin companies
-    final adminFilterOptions = ['All', 'None', ..._adminCompanies];
+    final teamDepartmentFilterOptions = ['All', 'None', ..._teamDepartments];
 
     showModalBottomSheet(
       context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.grey.withAlpha(77),
+      isScrollControlled: true,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setSheetState) {
-            return Container(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            return Center(
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+                child: Container(
+                  width: MediaQuery.of(context).size.width * 0.9,
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withAlpha(242),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Filter Options',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Filter Options', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                          IconButton(
+                            icon: const Icon(Icons.close),
+                            onPressed: () {
+                              Navigator.pop(context);
+                            },
+                          ),
+                        ],
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.close),
-                        onPressed: () {
-                          Navigator.pop(context);
-                        },
+                      const SizedBox(height: 16),
+                      const Text('Team Department', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: teamDepartmentFilterOptions.map((dept) {
+                          final isSelected = _teamDepartmentFilter == dept;
+                          return FilterChip(
+                            label: Text(dept),
+                            selected: isSelected,
+                            onSelected: (selected) {
+                              setSheetState(() {
+                                _teamDepartmentFilter = dept;
+                              });
+                              setState(() {
+                                _teamDepartmentFilter = dept;
+                                _filterEmployees();
+                              });
+                            },
+                            backgroundColor: Colors.white,
+                            selectedColor: Colors.green[900],
+                            checkmarkColor: Colors.green[800],
+                            labelStyle: TextStyle(
+                              color: isSelected ? Colors.blue[800] : Colors.black87,
+                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 16),
+                      const Text('Department', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: _filterOptions.map((filter) {
+                          final isSelected = _selectedFilter == filter;
+                          return FilterChip(
+                            label: Text(filter),
+                            selected: isSelected,
+                            onSelected: (selected) {
+                              setSheetState(() {
+                                _selectedFilter = filter;
+                              });
+                              setState(() {
+                                _selectedFilter = filter;
+                                _filterEmployees();
+                              });
+                            },
+                            backgroundColor: Colors.white,
+                            selectedColor: Colors.green[100],
+                            checkmarkColor: Colors.green[800],
+                            labelStyle: TextStyle(
+                              color: isSelected ? Colors.green[800] : Colors.black87,
+                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                            ),
+                          );
+                        }).toList(),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Admin Company',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: adminFilterOptions.map((company) {
-                      final isSelected = _adminCompanyFilter == company;
-                      return FilterChip(
-                        label: Text(company),
-                        selected: isSelected,
-                        onSelected: (selected) {
-                          setSheetState(() {
-                            _adminCompanyFilter = company;
-                          });
-                          setState(() {
-                            _adminCompanyFilter = company;
-                            _filterEmployees();
-                          });
-                        },
-                        backgroundColor: Colors.white,
-                        selectedColor: Colors.green[100],
-                        checkmarkColor: Colors.green[800],
-                        labelStyle: TextStyle(
-                          color: isSelected ? Colors.green[800] : Colors.black87,
-                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Department',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: _filterOptions.map((filter) {
-                      final isSelected = _selectedFilter == filter;
-                      return FilterChip(
-                        label: Text(filter),
-                        selected: isSelected,
-                        onSelected: (selected) {
-                          setSheetState(() {
-                            _selectedFilter = filter;
-                          });
-                          setState(() {
-                            _selectedFilter = filter;
-                            _filterEmployees();
-                          });
-                        },
-                        backgroundColor: Colors.white,
-                        selectedColor: Colors.green[100],
-                        checkmarkColor: Colors.green[800],
-                        labelStyle: TextStyle(
-                          color: isSelected ? Colors.green[800] : Colors.black87,
-                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ],
+                ),
               ),
             );
           },
@@ -395,79 +360,232 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
   void _showAssignDepartmentBottomSheet(BuildContext context, int employeeIndex, String employeeName) {
     showModalBottomSheet(
       context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.grey.withAlpha(77),
+      isScrollControlled: true,
       builder: (context) {
-        return Container(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        return Center(
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+            child: Container(
+              width: MediaQuery.of(context).size.width * 0.9,
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.white.withAlpha(242),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Assign $employeeName to Admin Company',
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Assign $employeeName', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () {
+                          Navigator.pop(context);
+                        },
+                      ),
+                    ],
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () {
-                      Navigator.pop(context);
-                    },
+                  const SizedBox(height: 16),
+                  const Text('What would you like to assign?', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.groups, color: Colors.white),
+                        label: const Text('Team Department', style: TextStyle(color: Colors.white)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green[900],
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        onPressed: () {
+                          Navigator.pop(context);
+                          _showTeamDepartmentSelectionSheet(context, employeeIndex, employeeName);
+                        },
+                      ),
+                    ],
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
-              const Text(
-                'Select admin company:',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Expanded(
-                child: ListView(
-                  shrinkWrap: true,
-                  children: [
-                    ListTile(
-                      title: const Text('None (Clear Assignment)'),
-                      leading: const Icon(Icons.clear, color: Colors.grey),
-                      onTap: () {
-                        _assignAdminCompany(employeeIndex, '');
-                        Navigator.pop(context);
-                      },
-                    ),
-                    const Divider(height: 1),
-                    ..._adminCompanies.map((company) {
-                      return ListTile(
-                        title: Text(company),
-                        leading: const Icon(Icons.business, color: Colors.green),
-                        trailing: _filteredEmployees[employeeIndex]['adminCompany'] == company
-                            ? Icon(Icons.check_circle, color: Colors.green[700])
-                            : null,
-                        onTap: () {
-                          _assignAdminCompany(employeeIndex, company);
-                          Navigator.pop(context);
-                        },
-                      );
-                    }).toList(),
-                  ],
-                ),
-              ),
-            ],
+            ),
           ),
         );
       },
     );
   }
 
+  void _showTeamDepartmentSelectionSheet(BuildContext context, int employeeIndex, String employeeName) {
+    showModalBottomSheet(
+      context: context,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.grey.withAlpha(77),
+      isScrollControlled: true,
+      builder: (context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+            child: Container(
+              width: MediaQuery.of(context).size.width * 0.9,
+              constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [BoxShadow(color: Colors.black.withAlpha(51), spreadRadius: 0, blurRadius: 15, offset: const Offset(0, 5))],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(24, 20, 16, 16),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Colors.green.shade900, Colors.green.shade700],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: const BorderRadius.only(topLeft: Radius.circular(24), topRight: Radius.circular(24)),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Assign $employeeName',
+                            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close, color: Colors.white),
+                          onPressed: () => Navigator.pop(context),
+                          style: IconButton.styleFrom(
+                            backgroundColor: Colors.white.withAlpha(51),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.business, size: 20, color: Colors.grey),
+                        const SizedBox(width: 8),
+                        const Text('Select Team Department', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.black87)),
+                      ],
+                    ),
+                  ),
+                  Flexible(
+                    child: ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                      shrinkWrap: true,
+                      itemCount: _teamDepartments.length,
+                      separatorBuilder: (context, index) => const SizedBox(height: 8),
+                      itemBuilder: (context, index) {
+                        final dept = _teamDepartments[index];
+                        final isSelected = _filteredEmployees[employeeIndex]['teamDepartment'] == dept;
+
+                        return Card(
+                          elevation: isSelected ? 2 : 0,
+                          margin: EdgeInsets.zero,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            side: BorderSide(color: isSelected ? Colors.green.shade700 : Colors.grey.withAlpha(51), width: isSelected ? 2 : 1),
+                          ),
+                          color: isSelected ? Colors.green.shade50 : Colors.white,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(12),
+                            onTap: () {
+                              _assignTeamDepartment(employeeIndex, dept);
+                              Navigator.pop(context);
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color: isSelected ? Colors.green.shade700 : Colors.green.shade700.withAlpha(26),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Icon(
+                                      Icons.groups,
+                                      color: isSelected ? Colors.white : Colors.green.shade700,
+                                      size: 24,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: Text(
+                                      dept,
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                                        color: isSelected ? Colors.green.shade700 : Colors.black87,
+                                      ),
+                                    ),
+                                  ),
+                                  if (isSelected) Icon(Icons.check_circle, color: Colors.green.shade700, size: 24),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => Navigator.pop(context),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.grey.shade700,
+                              minimumSize: const Size(0, 48),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              side: BorderSide(color: Colors.grey.shade400),
+                            ),
+                            child: const Text('Cancel'),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: FilledButton(
+                            onPressed: () => Navigator.pop(context),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: Colors.green.shade700,
+                              minimumSize: const Size(0, 48),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            child: const Text('Done', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.white)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
 
   Widget _buildEmployeeList() {
     if (_filteredEmployees.isEmpty) {
@@ -475,28 +593,11 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              Icons.search_off,
-              size: 64,
-              color: Colors.grey[400],
-            ),
+            Icon(Icons.search_off, size: 64, color: Colors.grey[400]),
             const SizedBox(height: 16),
-            Text(
-              'No employees found',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w500,
-                color: Colors.grey[600],
-              ),
-            ),
+            Text('No employees found', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500, color: Colors.grey[600])),
             const SizedBox(height: 8),
-            Text(
-              'Try adjusting your search or filters',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[500],
-              ),
-            ),
+            Text('Try adjusting your search or filters', style: TextStyle(fontSize: 14, color: Colors.grey[500])),
           ],
         ),
       );
@@ -510,133 +611,94 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
         final name = employee['name'] ?? 'Unknown';
         final role = employee['role'] ?? 'No Role';
         final department = employee['department'] ?? 'No Department';
-        final adminCompany = employee['adminCompany'] ?? '';
+        final teamDepartment = employee['teamDepartment'] ?? '';
 
-        // Get department color
         Color departmentColor;
         switch (department.toLowerCase()) {
           case 'it':
             departmentColor = Colors.blue;
             break;
           case 'creative':
-            departmentColor = Colors.purple;
+            departmentColor = Colors.pink;
             break;
           case 'operations':
-            departmentColor = Colors.orange;
+            departmentColor = Colors.amber;
             break;
           case 'finance':
-            departmentColor = Colors.teal;
+            departmentColor = Colors.purple;
             break;
           default:
             departmentColor = Colors.grey;
         }
 
-        return Container(
+        return Card(
+          color: Colors.white,
           margin: const EdgeInsets.only(bottom: 12),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.04),
-                blurRadius: 6,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: ListTile(
-            contentPadding: const EdgeInsets.all(16),
-            leading: CircleAvatar(
-              radius: 24,
-              backgroundColor: departmentColor.withOpacity(0.15),
-              child: Text(
-                name.isNotEmpty ? name[0] : '?',
-                style: TextStyle(
-                  color: departmentColor,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 18,
-                ),
-              ),
-            ),
-            title: Text(
-              name,
-              style: const TextStyle(
-                fontWeight: FontWeight.w600,
-                fontSize: 16,
-                color: Colors.black87,
-              ),
-            ),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 4),
-                Text(
-                  role,
-                  style: const TextStyle(
-                    color: Colors.black54,
-                    fontSize: 14,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: departmentColor.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(
-                        department,
-                        style: TextStyle(
-                          color: departmentColor,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
+          elevation: 2,
+          child: InkWell(
+            onTap: () => _showAssignDepartmentBottomSheet(context, index, name),
+            borderRadius: BorderRadius.circular(8),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    backgroundColor: departmentColor.withAlpha(51),
+                    child: Text(
+                      name.isNotEmpty ? name[0].toUpperCase() : '?',
+                      style: TextStyle(color: departmentColor, fontWeight: FontWeight.bold),
                     ),
-                    if (adminCompany.isNotEmpty) ...[
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.amber[50],
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: Colors.amber[300]!),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                        const SizedBox(height: 4),
+                        Text(role),
+                        const SizedBox(height: 6),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
                           children: [
-                            Icon(
-                              Icons.business,
-                              size: 10,
-                              color: Colors.amber[800],
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              adminCompany,
-                              style: TextStyle(
-                                color: Colors.amber[800],
-                                fontSize: 10,
-                                fontWeight: FontWeight.w500,
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: departmentColor.withAlpha(26),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: departmentColor.withAlpha(77), width: 1),
+                              ),
+                              child: Text(
+                                department,
+                                style: TextStyle(color: departmentColor, fontSize: 12, fontWeight: FontWeight.w500),
                               ),
                             ),
+                            if (teamDepartment.isNotEmpty)
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue[50],
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: Colors.blue[200]!, width: 1),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.groups, size: 10, color: Colors.blue[700]),
+                                    const SizedBox(width: 4),
+                                    Text(teamDepartment, style: TextStyle(color: Colors.blue[700], fontSize: 12)),
+                                  ],
+                                ),
+                              ),
                           ],
                         ),
-                      ),
-                    ],
-                  ],
-                ),
-              ],
-            ),
-            trailing: IconButton(
-              icon: Icon(
-                Icons.add_business,
-                color: Colors.green[700],
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey[400]),
+                ],
               ),
-              onPressed: () {
-                _showAssignDepartmentBottomSheet(context, index, name);
-              },
             ),
           ),
         );
