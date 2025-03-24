@@ -1,12 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:smartt_attendance/screen/FriendRequestPage.dart';
 import 'package:smartt_attendance/screen/admin_profile.dart';
-import 'package:smartt_attendance/screen/attendance-screen.dart';
 import 'package:smartt_attendance/screen/employeslist.dart';
-import 'package:smartt_attendance/screen/history.dart';
 import 'package:smartt_attendance/screen/homeadmin.dart';
-import 'package:smartt_attendance/screen/profile%20page.dart';
-import 'package:smartt_attendance/screen/teacher_admin_panel.dart';
 
 class AdminBottomNav extends StatefulWidget {
   const AdminBottomNav({super.key});
