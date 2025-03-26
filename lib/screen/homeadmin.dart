@@ -4,6 +4,9 @@ import 'package:intl/intl.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import 'addgroup.dart';
+import 'employee_list_screen.dart';
+
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({Key? key}) : super(key: key);
 
@@ -643,7 +646,8 @@ class _DashboardHomeState extends State<DashboardHome> with SingleTickerProvider
             child: Column(
               children: [
                 FloatingActionButton.extended(
-                  onPressed: () {
+                  onPressed: () { Navigator.push(context, MaterialPageRoute(builder: (context) => const EmployeeListScreen()),
+                  );
                     _toggleMenu();
                   },
                   backgroundColor: Colors.white,
@@ -654,7 +658,8 @@ class _DashboardHomeState extends State<DashboardHome> with SingleTickerProvider
                 ),
                 const SizedBox(height: 10),
                 FloatingActionButton.extended(
-                  onPressed: () {
+                  onPressed: () { Navigator.push(context, MaterialPageRoute(builder: (context) => const ProjectAssignmentScreen()),
+                  );
                     _toggleMenu();
                   },
                   backgroundColor: Colors.white,
