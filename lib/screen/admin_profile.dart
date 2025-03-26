@@ -618,7 +618,7 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
       children: [
         _buildOptionButton(
           icon: Icons.edit,
-          label: "Edit Profile",
+          label: "Edit Profilee",
           onTap: _showEditProfileSheet,
         ),
         const SizedBox(height: 12),
