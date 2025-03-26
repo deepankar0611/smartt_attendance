@@ -5,8 +5,9 @@ import 'package:smartt_attendance/admin_bottom_nav.dart';
 import 'package:smartt_attendance/screen/Sign%20Up.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:local_auth/local_auth.dart';
-import 'package:smartt_attendance/screen/teacher_admin_panel.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../bottom_navigation_bar.dart';
+
 enum UserType { student, teacher }
 
 class LoginScreen extends StatefulWidget {
@@ -16,121 +17,118 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStateMixin {
+class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final LocalAuthentication _localAuth = LocalAuthentication();
+
   bool _isLoading = false;
   UserType _selectedUserType = UserType.student;
-
-  late AnimationController _buttonAnimationController;
-  late Animation<double> _buttonScaleAnimation;
+  bool _isPasswordVisible = false;
+  bool _hasFaceId = false;
 
   @override
   void initState() {
     super.initState();
-    _buttonAnimationController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 200),
-    );
-    _buttonScaleAnimation = Tween<double>(begin: 1.0, end: 0.95).animate(
-      CurvedAnimation(parent: _buttonAnimationController, curve: Curves.easeInOut),
-    );
+    _checkFaceIdStatus();
   }
 
-  @override
-  void dispose() {
-    _emailController.dispose();
-    _passwordController.dispose();
-    _buttonAnimationController.dispose();
-    super.dispose();
+  Future<void> _checkFaceIdStatus() async {
+    final prefs = await SharedPreferences.getInstance();
+    final lastUserEmail = prefs.getString('last_user_email');
+    final lastUserType = prefs.getString('last_user_type');
+    final hasFaceId = lastUserEmail != null
+        ? prefs.getBool('has_face_id_$lastUserEmail') ?? false
+        : false;
+
+    setState(() {
+      _hasFaceId = hasFaceId;
+      if (lastUserEmail != null) _emailController.text = lastUserEmail;
+      if (lastUserType != null) {
+        _selectedUserType = lastUserType == 'student' ? UserType.student : UserType.teacher;
+      }
+    });
   }
 
   Future<void> _login() async {
-    if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fill in all fields')),
-      );
-      return;
-    }
-
-    await _buttonAnimationController.forward();
-    await _buttonAnimationController.reverse();
+    if (!_validateInputs()) return;
 
     setState(() => _isLoading = true);
 
     try {
-      UserCredential userCredential = await _auth.signInWithEmailAndPassword(
-        email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
-      );
-
-      String collectionName = _selectedUserType == UserType.student ? 'students' : 'teachers';
-      DocumentSnapshot userDoc = await _firestore.collection(collectionName).doc(userCredential.user!.uid).get();
-
-      if (userDoc.exists) {
-        if (userCredential.user!.emailVerified) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Login successful!')));
-
-          // Navigate based on user type
-          if (_selectedUserType == UserType.student) {
-            Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const HomeScreen()));
-          } else if (_selectedUserType == UserType.teacher) {
-            Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => AdminBottomNav()));
-          }
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text('Please verify your email first'),
-              action: SnackBarAction(
-                label: 'Resend',
-                onPressed: () async => await userCredential.user!.sendEmailVerification(),
-              ),
-            ),
-          );
-        }
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('User data not found. Please register as a Student or Teacher.')),
-        );
+      await _performFirebaseLogin();
+      if (!_hasFaceId) {
+        await _promptForFaceIdSetup();
       }
     } on FirebaseAuthException catch (e) {
-      String errorMessage;
-      switch (e.code) {
-        case 'user-not-found':
-          errorMessage = 'No user found with this email.';
-          break;
-        case 'wrong-password':
-          errorMessage = 'Incorrect password.';
-          break;
-        case 'invalid-email':
-          errorMessage = 'Invalid email format.';
-          break;
-        default:
-          errorMessage = 'An error occurred: ${e.message}';
-      }
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(errorMessage)));
+      _handleLoginError(e);
     } finally {
       setState(() => _isLoading = false);
     }
   }
 
-  Future<void> _loginWithFaceRecognition() async {
-    try {
-      bool canCheckBiometrics = await _localAuth.canCheckBiometrics;
-      bool isDeviceSupported = await _localAuth.isDeviceSupported();
+  bool _validateInputs() {
+    if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
+      _showSnackBar('Please fill in all fields');
+      return false;
+    }
+    return true;
+  }
 
-      if (!canCheckBiometrics || !isDeviceSupported) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Face recognition not supported on this device')),
-        );
-        return;
+  Future<void> _performFirebaseLogin() async {
+    UserCredential userCredential = await _auth.signInWithEmailAndPassword(
+      email: _emailController.text.trim(),
+      password: _passwordController.text.trim(),
+    );
+
+    String collectionName = _selectedUserType == UserType.student ? 'students' : 'teachers';
+    DocumentSnapshot userDoc = await _firestore.collection(collectionName).doc(userCredential.user!.uid).get();
+
+    if (userDoc.exists) {
+      if (userCredential.user!.emailVerified) {
+        await _saveLoginDetails(userCredential.user!.email!);
+        _showSnackBar('Login successful!');
+        _navigateBasedOnUserType();
+      } else {
+        _showEmailVerificationSnackBar(userCredential.user!);
       }
+    } else {
+      _showSnackBar('User data not found. Please register as a Student or Teacher.');
+    }
+  }
 
+  Future<void> _promptForFaceIdSetup() async {
+    bool canCheckBiometrics = await _localAuth.canCheckBiometrics;
+    bool isDeviceSupported = await _localAuth.isDeviceSupported();
+
+    if (!canCheckBiometrics || !isDeviceSupported) {
+      _showSnackBar('Face recognition not available on this device');
+      return;
+    }
+
+    bool? shouldSetupFaceId = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Enable Face ID'),
+        content: const Text('Would you like to set up Face ID for future logins?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('No'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Yes'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldSetupFaceId == true) {
       bool authenticated = await _localAuth.authenticate(
-        localizedReason: 'Please authenticate using your face to log in',
+        localizedReason: 'Please authenticate to set up Face ID',
         options: const AuthenticationOptions(
           biometricOnly: true,
           useErrorDialogs: true,
@@ -139,153 +137,265 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       );
 
       if (authenticated) {
-        User? user = _auth.currentUser;
-        if (user != null) {
-          String collectionName = _selectedUserType == UserType.student ? 'students' : 'teachers';
-          DocumentSnapshot userDoc = await _firestore.collection(collectionName).doc(user.uid).get();
-
-          if (userDoc.exists && user.emailVerified) {
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Login successful!')));
-            if (_selectedUserType == UserType.student) {
-              Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const HomeScreen()));
-            } else if (_selectedUserType == UserType.teacher) {
-              Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => AdminBottomNav()));
-            }
-          } else {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('User not found or email not verified')),
-            );
-          }
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Please log in with email first to enable face recognition')),
-          );
-        }
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('has_face_id_${_emailController.text}', true);
+        setState(() => _hasFaceId = true);
+        _showSnackBar('Face ID setup successful!');
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Face recognition failed')),
-        );
+        _showSnackBar('Face ID setup failed');
       }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
     }
+  }
+
+  Future<void> _saveLoginDetails(String email) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('last_user_email', email);
+    await prefs.setString('last_user_type', _selectedUserType == UserType.student ? 'student' : 'teacher');
+    final hasFaceId = prefs.getBool('has_face_id_$email') ?? false;
+    setState(() => _hasFaceId = hasFaceId);
+  }
+
+  Future<void> _logout() async {
+    await _auth.signOut();
+    await _checkFaceIdStatus();
+  }
+
+  void _navigateBasedOnUserType() {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => _selectedUserType == UserType.student
+            ? const HomeScreen()
+            : AdminBottomNav(),
+      ),
+    );
+  }
+
+  void _showEmailVerificationSnackBar(User user) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Please verify your email first'),
+        action: SnackBarAction(
+          label: 'Resend',
+          onPressed: () async => await user.sendEmailVerification(),
+        ),
+      ),
+    );
+  }
+
+  void _handleLoginError(FirebaseAuthException e) {
+    String errorMessage = _getErrorMessage(e);
+    _showSnackBar(errorMessage);
+  }
+
+  String _getErrorMessage(FirebaseAuthException e) {
+    switch (e.code) {
+      case 'user-not-found':
+        return 'No user found with this email.';
+      case 'wrong-password':
+        return 'Incorrect password.';
+      case 'invalid-email':
+        return 'Invalid email format.';
+      default:
+        return 'An error occurred: ${e.message}';
+    }
+  }
+
+  void _showSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Colors.teal[200]!, Colors.teal[50]!],
-          ),
+      body: _buildBackground(),
+    );
+  }
+
+  Widget _buildBackground() {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.green[900]!,
+            Colors.green[600]!,
+          ],
         ),
-        child: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(20.0),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const SizedBox(height: 30),
-                  Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(100),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          blurRadius: 10,
-                          spreadRadius: 2,
-                          offset: const Offset(0, 3),
-                        ),
-                      ],
-                    ),
-                    child: const Icon(LucideIcons.fingerprint, size: 80, color: Colors.teal),
-                  ),
-                  const SizedBox(height: 40),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      _buildUserTypeButton(UserType.student, 'Student'),
-                      const SizedBox(width: 20),
-                      _buildUserTypeButton(UserType.teacher, 'Teacher'),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  _buildTextField(
-                    controller: _emailController,
-                    labelText: 'Email',
-                    hintText: 'example@email.com',
-                    prefixIcon: LucideIcons.mail,
-                    keyboardType: TextInputType.emailAddress,
-                  ),
-                  const SizedBox(height: 20),
-                  _buildTextField(
-                    controller: _passwordController,
-                    labelText: 'Password',
-                    prefixIcon: LucideIcons.lock,
-                    obscureText: true,
-                  ),
-                  const SizedBox(height: 30),
-                  ScaleTransition(
-                    scale: _buttonScaleAnimation,
-                    child: ElevatedButton(
-                      onPressed: _isLoading ? null : _login,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.teal,
-                        padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 15),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-                        elevation: 5,
-                      ),
-                      child: _isLoading
-                          ? const SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3.0),
-                      )
-                          : const Text('LOGIN', style: TextStyle(color: Colors.white, fontSize: 25)),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  ElevatedButton.icon(
-                    onPressed: _loginWithFaceRecognition,
-                    icon: const Icon(LucideIcons.user, color: Colors.white),
-                    label: const Text('Login with FaceID', style: TextStyle(color: Colors.white)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.teal[700],
-                      padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  TextButton(
-                    onPressed: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => const SignUp()));
-                    },
-                    child: const Text('New user? Register Now', style: TextStyle(color: Colors.teal, fontSize: 16)),
-                  ),
-                  const SizedBox(height: 30),
-                  const Text('Or sign in with', style: TextStyle(color: Colors.grey)),
-                  const SizedBox(height: 15),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      _buildSocialButton(LucideIcons.facebook, Colors.blue, () {}),
-                      const SizedBox(width: 20),
-                      _buildSocialButton(LucideIcons.goal, Colors.red, () {}),
-                    ],
-                  ),
-                ],
+      ),
+      child: SafeArea(
+        child: Column(
+          children: [
+            _buildHeader(),
+            Expanded(
+              child: _buildLoginContainer(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 24),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Welcome Back',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
+              Text(
+                'Sign in to continue',
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.7),
+                  fontSize: 16,
+                ),
+              ),
+            ],
+          ),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(15),
+            ),
+            padding: const EdgeInsets.all(10),
+            child: Icon(
+              LucideIcons.fingerprint,
+              color: Colors.white,
+              size: 40,
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLoginContainer() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(40),
+          topRight: Radius.circular(40),
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 20,
+            offset: Offset(0, -10),
+          ),
+        ],
+      ),
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildUserTypeToggle(),
+              const SizedBox(height: 30),
+              _buildEmailTextField(),
+              const SizedBox(height: 20),
+              _buildPasswordTextField(),
+              const SizedBox(height: 20),
+              _buildForgotPasswordLink(),
+              const SizedBox(height: 30),
+              _buildLoginButton(),
+              const SizedBox(height: 30),
+              _buildSocialLoginSection(),
+              const SizedBox(height: 20),
+              _buildRegisterLink(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildUserTypeToggle() {
+    return Center(
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.grey.shade50,
+          borderRadius: BorderRadius.circular(30),
+        ),
+        padding: const EdgeInsets.all(4),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildUserTypeChip(UserType.student, 'Student'),
+            _buildUserTypeChip(UserType.teacher, 'Teacher'),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildUserTypeChip(UserType type, String label) {
+    bool isSelected = _selectedUserType == type;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _selectedUserType = type;
+        });
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.green : Colors.transparent,
+          borderRadius: BorderRadius.circular(30),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? Colors.white : Colors.green,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmailTextField() {
+    return _buildTextField(
+      controller: _emailController,
+      labelText: 'Email Address',
+      hintText: 'Enter your email',
+      prefixIcon: LucideIcons.mail,
+      keyboardType: TextInputType.emailAddress,
+    );
+  }
+
+  Widget _buildPasswordTextField() {
+    return _buildTextField(
+      controller: _passwordController,
+      labelText: 'Password',
+      hintText: 'Enter your password',
+      prefixIcon: LucideIcons.lock,
+      obscureText: !_isPasswordVisible,
+      suffixIcon: IconButton(
+        icon: Icon(
+          _isPasswordVisible ? LucideIcons.eye : LucideIcons.eyeOff,
+          color: Colors.black,
+        ),
+        onPressed: () {
+          setState(() {
+            _isPasswordVisible = !_isPasswordVisible;
+          });
+        },
       ),
     );
   }
@@ -295,60 +405,166 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     required String labelText,
     String? hintText,
     required IconData prefixIcon,
+    IconButton? suffixIcon,
     bool obscureText = false,
     TextInputType? keyboardType,
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 2))],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.2),
+            blurRadius: 15,
+            offset: Offset(0, 10),
+          ),
+        ],
       ),
       child: TextField(
         controller: controller,
         obscureText: obscureText,
         keyboardType: keyboardType,
+        style: TextStyle(color: Colors.black),
         decoration: InputDecoration(
-          labelText: labelText,
-          hintText: hintText,
-          prefixIcon: Icon(prefixIcon, color: Colors.teal),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
           filled: true,
           fillColor: Colors.white,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          labelText: labelText,
+          hintText: hintText,
+          prefixIcon: Icon(prefixIcon, color: Colors.black),
+          suffixIcon: suffixIcon,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(15),
+            borderSide: BorderSide.none,
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(15),
+            borderSide: BorderSide.none,
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(15),
+            borderSide: BorderSide(color: Colors.grey, width: 1),
+          ),
+          labelStyle: TextStyle(color: Colors.black),
+          hintStyle: TextStyle(color: Colors.black),
+          contentPadding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
         ),
       ),
+    );
+  }
+
+  Widget _buildForgotPasswordLink() {
+    return Align(
+      alignment: Alignment.centerRight,
+      child: TextButton(
+        onPressed: () {},
+        child: Text(
+          'Forgot Password?',
+          style: TextStyle(
+            color: Colors.black,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLoginButton() {
+    return ElevatedButton(
+      onPressed: _isLoading ? null : _login,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: Colors.green.shade900,
+        foregroundColor: Colors.white,
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(15),
+        ),
+        elevation: 5,
+      ),
+      child: _isLoading
+          ? CircularProgressIndicator(
+        color: Colors.white,
+        strokeWidth: 3,
+      )
+          : Text(
+        'LOGIN',
+        style: TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
+          letterSpacing: 1.2,
+        ),
+      ),
+    );
+  }
+
+
+  Widget _buildSocialLoginSection() {
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(child: Divider(color: Colors.green[200])),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Text(
+                'Or continue with',
+                style: TextStyle(
+                  color: Colors.black,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            Expanded(child: Divider(color: Colors.green[200])),
+          ],
+        ),
+        const SizedBox(height: 20),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _buildSocialButton(LucideIcons.facebook, Colors.blue, () {}),
+            const SizedBox(width: 20),
+            _buildSocialButton(LucideIcons.github, Colors.black, () {}),
+          ],
+        ),
+      ],
     );
   }
 
   Widget _buildSocialButton(IconData icon, Color color, VoidCallback onPressed) {
-    return InkWell(
-      onTap: onPressed,
-      borderRadius: BorderRadius.circular(30),
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: color.withOpacity(0.2),
-          boxShadow: [BoxShadow(color: color.withOpacity(0.3), blurRadius: 6, offset: const Offset(0, 2))],
-        ),
-        child: Icon(icon, color: color, size: 28),
+    return ElevatedButton(
+      onPressed: onPressed,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: color,
+        shape: CircleBorder(),
+        padding: const EdgeInsets.all(15),
+        elevation: 5,
       ),
+      child: Icon(icon, color: Colors.white, size: 30),
     );
   }
 
-  Widget _buildUserTypeButton(UserType type, String label) {
-    return ElevatedButton(
-      onPressed: () => setState(() => _selectedUserType = type),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: _selectedUserType == type ? Colors.teal : Colors.white,
-        padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 12),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(color: _selectedUserType == type ? Colors.white : Colors.teal, fontSize: 16),
-      ),
+  Widget _buildRegisterLink() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text(
+          'Don\'t have an account? ',
+          style: TextStyle(color: Colors.black),
+        ),
+        GestureDetector(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const SignUp()),
+            );
+          },
+          child: Text(
+            'Register Now',
+            style: TextStyle(
+              color: Colors.black,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

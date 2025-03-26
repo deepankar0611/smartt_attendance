@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:smartt_attendance/screen/login_screen.dart';
+import 'package:smartt_attendance/screen/password.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 
@@ -196,11 +197,29 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
     );
   }
 
-  void _logout() async {
+  Future<void> _logout() async {
     try {
+      // Show loading indicator
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => Center(
+          child: CircularProgressIndicator(
+            color: Colors.green.shade900,
+          ),
+        ),
+      );
       await FirebaseAuth.instance.signOut();
+      Navigator.of(context, rootNavigator: true).pop();
       _showSnackBar('Logged out successfully');
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => LoginScreen()),
+            (route) => false,
+      );
     } catch (e) {
+      // Close loading dialog if open
+      Navigator.of(context, rootNavigator: true).pop();
       _showSnackBar('Error logging out: $e');
     }
   }
@@ -263,8 +282,12 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
     }
   }
 
-  void _navigateToSettingsPage() {
-    _showSnackBar('Settings feature to be implemented');
+  // In your AdminProfilePage or wherever you want to trigger the password change
+  void _changePassword() {
+    showDialog(
+      context: context,
+      builder: (context) => const PasswordChangeSheet(),
+    );
   }
 
   void _viewAuditLogs() {
@@ -608,7 +631,7 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
         _buildOptionButton(
           icon: Icons.settings,
           label: "Settings",
-          onTap: _navigateToSettingsPage,
+          onTap: _changePassword,
         ),
         const SizedBox(height: 16),
         _buildOptionButton(
@@ -633,8 +656,8 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
               _showSnackBar('Account deleted successfully');
               // Example: Navigate to login screen
               Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(builder: (context) => LoginScreen()),
+                context,
+                MaterialPageRoute(builder: (context) => LoginScreen()),
               );
             }
           },
@@ -683,4 +706,3 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
     );
   }
 }
-
