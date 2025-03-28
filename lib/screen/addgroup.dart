@@ -16,7 +16,7 @@ class _ProjectAssignmentScreenState extends State<ProjectAssignmentScreen> {
   final TextEditingController _projectDescriptionController = TextEditingController();
   DateTime _deadline = DateTime.now().add(const Duration(days: 14));
   final List<Map<String, dynamic>> _allEmployees = [
-    {'id': 1, 'name': 'Emma Johnson', 'role': 'UI ', 'avatar': 'assets/avatars/emma.jpg', 'department': 'Design'},
+    {'id': 1, 'name': 'Emma Johnson', 'role': 'UI Developer', 'avatar': 'assets/avatars/emma.jpg', 'department': 'Design'},
     {'id': 2, 'name': 'Michael Chen', 'role': 'Frontend Developer', 'avatar': 'assets/avatars/michael.jpg', 'department': 'Engineering'},
     {'id': 3, 'name': 'Sarah Williams', 'role': 'Project Manager', 'avatar': 'assets/avatars/sarah.jpg', 'department': 'Management'},
     {'id': 4, 'name': 'David Kim', 'role': 'Backend Developer', 'avatar': 'assets/avatars/david.jpg', 'department': 'Engineering'},
