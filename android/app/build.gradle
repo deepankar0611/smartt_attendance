@@ -21,6 +21,12 @@ android {
     namespace = "com.example.smartt_attendance"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
+    // Add this configuration to exclude problematic plugins
+    configurations.all {
+        exclude group: 'io.flutter.plugins.localauth', module: 'local_auth_android'
+        exclude group: 'io.flutter.plugins.pathprovider', module: 'path_provider_android'
+        exclude group: 'io.flutter.plugins.urllauncher', module: 'url_launcher_android'
+    }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_1_8
@@ -28,7 +34,7 @@ android {
     }
 
     kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_1_8
+        jvmTarget = "1.8"
     }
 
     defaultConfig {

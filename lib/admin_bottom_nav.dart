@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:smartt_attendance/screen/admin_profile.dart';
-import 'package:smartt_attendance/screen/employeslist.dart';
-import 'package:smartt_attendance/screen/homeadmin.dart';
+import 'package:smartt_attendance/admin%20screen/admin_profile.dart';
+import 'package:smartt_attendance/admin%20screen/employeslist.dart';
+import 'package:smartt_attendance/admin%20screen/homeadmin.dart';
 
 class AdminBottomNav extends StatefulWidget {
   const AdminBottomNav({super.key});
@@ -31,7 +31,7 @@ class _AdminBottomNavState extends State<AdminBottomNav> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: _pages[_selectedIndex], // Display the selected screen
+      body: _pages[_selectedIndex], // Display the selected student screen
       bottomNavigationBar: Container(
         margin: const EdgeInsets.all(15),
         height: 70,

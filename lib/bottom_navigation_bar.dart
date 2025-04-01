@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:smartt_attendance/screen/attendance-screen.dart';
-import 'package:smartt_attendance/screen/history.dart';
-import 'package:smartt_attendance/screen/profile%20page.dart';
+import 'package:smartt_attendance/student%20screen/attendance-screen.dart';
+import 'package:smartt_attendance/student%20screen/history.dart';
+import 'package:smartt_attendance/student%20screen/profile%20page.dart';
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -29,7 +29,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: _pages[_selectedIndex], // Display the selected screen
+      body: _pages[_selectedIndex], // Display the selected student screen
       bottomNavigationBar: Container(
         margin: const EdgeInsets.all(15),
         height: 70,
