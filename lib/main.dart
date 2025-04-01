@@ -2,14 +2,13 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:smartt_attendance/admin_bottom_nav.dart';
 import 'package:smartt_attendance/bottom_navigation_bar.dart';
-import 'package:smartt_attendance/screen/attendance-screen.dart';
-import 'package:smartt_attendance/screen/login_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:smartt_attendance/screen/profile%20page.dart';
+import 'package:smartt_attendance/student%20screen/login_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as sp;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'firebase_options.dart';
 import 'models/bottom_sheet.dart';
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(
@@ -17,7 +16,8 @@ Future<void> main() async {
   );
   await sp.Supabase.initialize(
     url: 'https://xzoyevujxvqaumrdskhd.supabase.co',
-    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh6b3lldnVqeHZxYXVtcmRza2hkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzkyMTE1MjMsImV4cCI6MjA1NDc4NzUyM30.mbV_Scy2fXbMalxVRGHNKOxYx0o6t-nUPmDLlH5Mr_U',
+    anonKey:
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh6b3lldnVqeHZxYXVtcmRza2hkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzkyMTE1MjMsImV4cCI6MjA1NDc4NzUyM30.mbV_Scy2fXbMalxVRGHNKOxYx0o6t-nUPmDLlH5Mr_U',
   );
   runApp(const MyApp());
 }
