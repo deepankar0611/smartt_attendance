@@ -1,9 +1,11 @@
 import 'dart:ui';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:smartt_attendance/screen/settingsheet.dart';
 import 'dart:io';
+import 'leave.dart';
 import 'login_screen.dart';
 import 'edit_profile_sheet.dart';
 import 'package:image_picker/image_picker.dart'; // For picking images
@@ -12,7 +14,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'notification.dart'; // For Supabase integration
 
 class ModernProfilePage extends StatefulWidget {
-  const ModernProfilePage({Key? key}) : super(key: key);
+  const ModernProfilePage({super.key});
 
   @override
   _ModernProfilePageState createState() => _ModernProfilePageState();
@@ -43,7 +45,9 @@ class _ModernProfilePageState extends State<ModernProfilePage> {
     super.initState();
     _userId = _auth.currentUser?.uid ?? '';
     if (_userId.isEmpty) {
-      print('No user is currently signed in.');
+      if (kDebugMode) {
+        print('No user is currently signed in.');
+      }
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => const LoginScreen()),
@@ -164,7 +168,9 @@ class _ModernProfilePageState extends State<ModernProfilePage> {
         try {
           await _supabase.storage.from('profile-pictures').remove([oldFileName]);
         } catch (e) {
-          print('Error deleting old image: $e');
+          if (kDebugMode) {
+            print('Error deleting old image: $e');
+          }
         }
       }
 
@@ -276,6 +282,27 @@ class _ModernProfilePageState extends State<ModernProfilePage> {
         _showSnackBar('Profile updated successfully');
       } catch (e) {
         _showSnackBar('Error updating profile: $e');
+      }
+    }
+  }
+  void _navigateToleavePage() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const LeaveApplicationPage()),
+    );
+
+    if (result == 'update') {
+      _showSnackBar('Password updated successfully');
+    } else if (result == 'delete') {
+      try {
+        _showSnackBar('Account deleted successfully');
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (context) => const LoginScreen()),
+              (Route<dynamic> route) => false,
+        );
+      } catch (e) {
+        _showSnackBar('Error deleting account: $e');
       }
     }
   }
@@ -536,6 +563,11 @@ class _ModernProfilePageState extends State<ModernProfilePage> {
           onTap: _navigateToSettingsPage,
         ),
         const SizedBox(height: 16),
+        _buildOptionButton(
+          icon: Icons.leave_bags_at_home,
+          label: "leave application",
+          onTap: _navigateToleavePage,
+        ),
         const SizedBox(height: 16),
         _buildOptionButton(
           icon: Icons.person_add,
