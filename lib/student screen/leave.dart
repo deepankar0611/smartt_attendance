@@ -21,7 +21,6 @@ class _LeaveApplicationPageState extends State<LeaveApplicationPage> {
     _reasonController.dispose();
     super.dispose();
   }
-
   Future<void> _selectDate(BuildContext context, bool isStartDate) async {
     final DateTime? picked = await showDatePicker(
       context: context,
