@@ -1,8 +1,8 @@
-import 'dart:io';
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class ProjectAssignmentScreen extends StatefulWidget {
   const ProjectAssignmentScreen({super.key});
@@ -14,38 +14,82 @@ class ProjectAssignmentScreen extends StatefulWidget {
 class _ProjectAssignmentScreenState extends State<ProjectAssignmentScreen> {
   final TextEditingController _projectNameController = TextEditingController();
   final TextEditingController _projectDescriptionController = TextEditingController();
-  DateTime _deadline = DateTime.now().add(const Duration(days: 14));
-  List<File>? _projectFiles;
+  DateTime _deadline = DateTime.now().add(const Duration(days: 1));
 
-  final List<Map<String, dynamic>> _allEmployees = [
-    {'id': 1, 'name': 'Emma Johnson', 'role': 'UI Developer', 'avatar': 'assets/avatars/emma.jpg', 'department': 'Design'},
-    {'id': 2, 'name': 'Michael Chen', 'role': 'Frontend Developer', 'avatar': 'assets/avatars/michael.jpg', 'department': 'Engineering'},
-    {'id': 3, 'name': 'Sarah Williams', 'role': 'Project Manager', 'avatar': 'assets/avatars/sarah.jpg', 'department': 'Management'},
-    {'id': 4, 'name': 'David Kim', 'role': 'Backend Developer', 'avatar': 'assets/avatars/david.jpg', 'department': 'Engineering'},
-    {'id': 5, 'name': 'Alex Rodriguez', 'role': 'UX Researcher', 'avatar': 'assets/avatars/alex.jpg', 'department': 'Design'},
-    {'id': 6, 'name': 'Lisa Patel', 'role': 'QA Engineer', 'avatar': 'assets/avatars/lisa.jpg', 'department': 'Engineering'},
-    {'id': 7, 'name': 'John Smith', 'role': 'DevOps Engineer', 'avatar': 'assets/avatars/john.jpg', 'department': 'Operations'},
-    {'id': 8, 'name': 'Olivia Brown', 'role': 'Content Strategist', 'avatar': 'assets/avatars/olivia.jpg', 'department': 'Marketing'},
-  ];
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  late String _userId;
 
+  List<Map<String, dynamic>> _allEmployees = [];
   final List<Map<String, dynamic>> _selectedEmployees = [];
   List<Map<String, dynamic>> _filteredEmployees = [];
   String _searchQuery = '';
   String _selectedDepartment = 'All';
-  final List<String> _departments = ['All', 'Engineering', 'Design', 'Management', 'Operations', 'Marketing'];
+  List<String> _departments = ['All'];
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _filteredEmployees = List.from(_allEmployees);
+    _userId = _auth.currentUser?.uid ?? '';
+    if (_userId.isEmpty) {
+      print('No user is currently signed in.');
+    }
+    _fetchFriends();
+  }
+
+  Future<void> _fetchFriends() async {
+    try {
+      setState(() => _isLoading = true);
+
+      QuerySnapshot friendsSnapshot = await _firestore
+          .collection('teachers')
+          .doc(_userId)
+          .collection('friends')
+          .get();
+
+      List<String> friendUids = friendsSnapshot.docs
+          .map((doc) => doc.get('friendId') as String)
+          .toList();
+
+      List<Map<String, dynamic>> employees = [];
+      Set<String> departments = {'All'};
+      for (String friendUid in friendUids) {
+        DocumentSnapshot studentDoc = await _firestore.collection('students').doc(friendUid).get();
+        if (studentDoc.exists) {
+          var data = studentDoc.data() as Map<String, dynamic>;
+          String job = data['job'] ?? 'Unknown Role';
+          departments.add(job);
+          employees.add({
+            'id': friendUid,
+            'name': data['name'] ?? 'Unknown Name',
+            'role': job,
+            'avatar': data['profileImageUrl'] ?? 'https://i.pravatar.cc/150?img=${friendUid.hashCode % 10}',
+            'department': job,
+          });
+        }
+      }
+
+      setState(() {
+        _allEmployees = employees;
+        _filteredEmployees = List.from(_allEmployees);
+        _departments = departments.toList()..sort();
+        _isLoading = false;
+      });
+    } catch (e) {
+      print('Error fetching friends: $e');
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load employees: $e'), backgroundColor: Colors.red),
+      );
+    }
   }
 
   void _filterEmployees() {
     setState(() {
       _filteredEmployees = _allEmployees.where((employee) =>
       (_selectedDepartment == 'All' || employee['department'] == _selectedDepartment) &&
-          employee['name'].toLowerCase().contains(_searchQuery.toLowerCase())
-      ).toList();
+          employee['name'].toLowerCase().contains(_searchQuery.toLowerCase())).toList();
     });
   }
 
@@ -59,12 +103,92 @@ class _ProjectAssignmentScreenState extends State<ProjectAssignmentScreen> {
     });
   }
 
-  Future<void> _pickFiles() async {
-    FilePickerResult? result = await FilePicker.platform.pickFiles(allowMultiple: true, type: FileType.any);
-    if (result != null) {
-      setState(() {
-        _projectFiles = result.paths.map((path) => File(path!)).toList();
+  Future<void> _validateAndAssignProject() async {
+    // Validation checks
+    if (_projectNameController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Project name is required.'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+      return;
+    }
+
+    if (_projectDescriptionController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Project description is required.'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+      return;
+    }
+
+    final today = DateTime.now();
+    final tomorrow = DateTime(today.year, today.month, today.day + 1);
+    if (_deadline.isBefore(tomorrow)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Deadline must be set to tomorrow or later.'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+      return;
+    }
+
+    if (_selectedEmployees.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('At least one employee must be selected.'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      // Create project document in Firestore
+      await _firestore.collection('projects').add({
+        'name': _projectNameController.text.trim(),
+        'description': _projectDescriptionController.text.trim(),
+        'deadline': Timestamp.fromDate(_deadline),
+        'creatorUid': _userId,
+        'employeeUids': _selectedEmployees.map((e) => e['id']).toList(),
+        'createdAt': Timestamp.now(),
       });
+
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Project assigned successfully!'),
+          backgroundColor: Colors.green,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+
+      // Navigate back to ProjectListScreen with a success indicator
+      if (mounted) {
+        Navigator.pop(context, true); // Return true to trigger refresh in ProjectListScreen
+      }
+    } catch (e) {
+      print('Error assigning project: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to assign project: $e'), backgroundColor: Colors.red),
+      );
+    } finally {
+      setState(() => _isLoading = false);
     }
   }
 
@@ -87,10 +211,11 @@ class _ProjectAssignmentScreenState extends State<ProjectAssignmentScreen> {
           ),
         ),
       ),
-      body: SingleChildScrollView(
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
         child: Column(
           children: [
-            // Project Details Section
             Container(
               margin: const EdgeInsets.all(16),
               padding: const EdgeInsets.all(20),
@@ -111,7 +236,7 @@ class _ProjectAssignmentScreenState extends State<ProjectAssignmentScreen> {
                   TextFormField(
                     controller: _projectNameController,
                     decoration: InputDecoration(
-                      labelText: 'Project Name',
+                      labelText: 'Project Name *',
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                       prefixIcon: Icon(LucideIcons.fileText, size: 20),
                       floatingLabelBehavior: FloatingLabelBehavior.always,
@@ -124,9 +249,9 @@ class _ProjectAssignmentScreenState extends State<ProjectAssignmentScreen> {
                     controller: _projectDescriptionController,
                     maxLines: 3,
                     decoration: InputDecoration(
-                      labelText: 'Project Description',
+                      labelText: 'Project Description *',
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                      prefixIcon: Padding(padding: const EdgeInsets.only(bottom: 40), child: Icon(LucideIcons.alignLeft, size: 20)),
+                      prefixIcon: Padding(padding: const EdgeInsets.only(top: 40), child: Icon(LucideIcons.alignLeft, size: 20)),
                       alignLabelWithHint: true,
                       floatingLabelBehavior: FloatingLabelBehavior.always,
                       filled: true,
@@ -137,15 +262,17 @@ class _ProjectAssignmentScreenState extends State<ProjectAssignmentScreen> {
                   Row(children: [
                     Icon(LucideIcons.calendar, color: Colors.green.shade700, size: 20),
                     const SizedBox(width: 8),
-                    const Text('Deadline', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    const Text('Deadline *', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                   ]),
                   const SizedBox(height: 8),
                   InkWell(
                     onTap: () async {
+                      final today = DateTime.now();
+                      final tomorrow = DateTime(today.year, today.month, today.day + 1);
                       final DateTime? picked = await showDatePicker(
                         context: context,
-                        initialDate: _deadline,
-                        firstDate: DateTime.now(),
+                        initialDate: _deadline.isBefore(tomorrow) ? tomorrow : _deadline,
+                        firstDate: tomorrow,
                         lastDate: DateTime.now().add(const Duration(days: 365)),
                         builder: (context, child) => Theme(
                           data: Theme.of(context).copyWith(
@@ -176,42 +303,9 @@ class _ProjectAssignmentScreenState extends State<ProjectAssignmentScreen> {
                     ),
                   ),
                   const SizedBox(height: 20),
-                  ElevatedButton.icon(
-                    onPressed: _pickFiles,
-                    icon: Icon(LucideIcons.upload, size: 18),
-                    label: const Text('Upload Files'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green.shade700,
-                      foregroundColor: Colors.white,
-                      minimumSize: const Size(double.infinity, 48),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      elevation: 0,
-                    ),
-                  ),
-                  if (_projectFiles != null && _projectFiles!.isNotEmpty) ...[
-                    Container(
-                      margin: const EdgeInsets.only(top: 12),
-                      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-                      decoration: BoxDecoration(
-                        color: Colors.green.shade50,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.green.shade100),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(LucideIcons.fileCheck, size: 16, color: Colors.green.shade700),
-                          const SizedBox(width: 8),
-                          Text('${_projectFiles!.length} files selected', style: TextStyle(color: Colors.green.shade700, fontWeight: FontWeight.w500)),
-                        ],
-                      ),
-                    ),
-                  ],
                 ],
               ),
             ),
-
-            // Employee Selection Section
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Container(
@@ -230,7 +324,7 @@ class _ProjectAssignmentScreenState extends State<ProjectAssignmentScreen> {
                           Row(children: [
                             Icon(LucideIcons.users, color: Colors.green.shade700, size: 22),
                             const SizedBox(width: 8),
-                            const Text('Employees', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                            const Text('Employees *', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                           ]),
                           const SizedBox(height: 20),
                           Row(
@@ -301,9 +395,13 @@ class _ProjectAssignmentScreenState extends State<ProjectAssignmentScreen> {
                           final employee = _filteredEmployees[index];
                           final isSelected = _selectedEmployees.any((e) => e['id'] == employee['id']);
                           return ListTile(
-                            leading: CircleAvatar(backgroundImage: AssetImage(employee['avatar']), backgroundColor: Colors.grey.shade200),
-                            title: Text(employee['name'], style: TextStyle(fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, color: isSelected ? Colors.green.shade700 : Colors.grey.shade800)),
-                            subtitle: Text('${employee['role']} • ${employee['department']}', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                            leading: CircleAvatar(
+                              backgroundImage: NetworkImage(employee['avatar']),
+                              backgroundColor: Colors.grey.shade200,
+                            ),
+                            title: Text(employee['name'],
+                                style: TextStyle(fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, color: isSelected ? Colors.green.shade700 : Colors.grey.shade800)),
+                            subtitle: Text(employee['role'], style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
                             trailing: Checkbox(
                               value: isSelected,
                               activeColor: Colors.green.shade700,
@@ -339,8 +437,6 @@ class _ProjectAssignmentScreenState extends State<ProjectAssignmentScreen> {
                 ),
               ),
             ),
-
-            // Selected Employees Section
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
               child: Container(
@@ -388,7 +484,11 @@ class _ProjectAssignmentScreenState extends State<ProjectAssignmentScreen> {
                           final employee = _selectedEmployees[index];
                           return ListTile(
                             dense: true,
-                            leading: CircleAvatar(backgroundImage: AssetImage(employee['avatar']), radius: 16, backgroundColor: Colors.grey.shade200),
+                            leading: CircleAvatar(
+                              backgroundImage: NetworkImage(employee['avatar']),
+                              radius: 16,
+                              backgroundColor: Colors.grey.shade200,
+                            ),
                             title: Text(employee['name']),
                             subtitle: Text(employee['role']),
                             trailing: IconButton(icon: const Icon(Icons.close, size: 16), onPressed: () => _toggleEmployeeSelection(employee)),
@@ -409,32 +509,31 @@ class _ProjectAssignmentScreenState extends State<ProjectAssignmentScreen> {
         color: Colors.white,
         child: SafeArea(
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Row(
               children: [
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('${_selectedEmployees.length} employees selected', style: TextStyle(fontWeight: FontWeight.w500, color: Colors.grey.shade800)),
-                    if (_selectedEmployees.isNotEmpty)
-                      Text('Tap to review selection', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
-                  ],
+                Flexible(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${_selectedEmployees.length} employees selected',
+                        style: TextStyle(fontWeight: FontWeight.w500, color: Colors.grey.shade800),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (_selectedEmployees.isNotEmpty)
+                        Text(
+                          'Tap to review selection',
+                          style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                    ],
+                  ),
                 ),
                 const Spacer(),
                 FilledButton.icon(
-                  onPressed: _selectedEmployees.isEmpty
-                      ? null
-                      : () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: const Text('Project assigned successfully!'),
-                        backgroundColor: Colors.green.shade700,
-                        behavior: SnackBarBehavior.floating,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      ),
-                    );
-                  },
+                  onPressed: _validateAndAssignProject,
                   icon: const Icon(Icons.check_circle),
                   label: const Text('Assign Project'),
                   style: FilledButton.styleFrom(
