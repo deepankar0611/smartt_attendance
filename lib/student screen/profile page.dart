@@ -23,7 +23,6 @@ class ModernProfilePage extends StatefulWidget {
 }
 
 class _ModernProfilePageState extends State<ModernProfilePage> {
-  File? _profileImage;
   String? _profileImageUrl;
   String _name = "";
   String _job = "";
@@ -314,7 +313,6 @@ class _ModernProfilePageState extends State<ModernProfilePage> {
 
       setState(() {
         _profileImageUrl = imageUrl;
-        _profileImage = imageFile;
       });
 
       _showSnackBar('Profile picture updated successfully');

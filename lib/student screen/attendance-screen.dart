@@ -28,6 +28,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
   late String _userId;
+  String? _teacherId; // Store teacher ID
+  Map<String, dynamic>? _officeTimings; // Store office timing settings
 
   // Location data
   Position? _checkInLocation;
@@ -105,6 +107,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
           _mobile = data['mobile'] ?? 'Not provided';
           _profileImageUrl = data['profileImageUrl'];
         });
+        
+        // Fetch teacher ID from friends list
+        await _fetchTeacherId();
       } else {
         // If no document exists, create a basic one with email from auth
         await _firestore.collection('students').doc(_userId).set({
@@ -125,6 +130,83 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
         _email = _auth.currentUser?.email ?? 'unknown';
         _mobile = 'Not provided';
       });
+    }
+  }
+
+  Future<void> _fetchTeacherId() async {
+    try {
+      // Get the friends list for the current student
+      QuerySnapshot friendsSnapshot = await _firestore
+          .collection('students')
+          .doc(_userId)
+          .collection('friends')
+          .get();
+
+      if (friendsSnapshot.docs.isNotEmpty) {
+        // Get the first friend's ID (assuming one teacher per student)
+        final friendDoc = friendsSnapshot.docs.first;
+        final friendData = friendDoc.data() as Map<String, dynamic>;
+        final teacherId = friendData['friendId'] as String?;
+
+        if (teacherId != null) {
+          setState(() {
+            _teacherId = teacherId;
+          });
+          // Fetch office timing settings for the teacher
+          await _fetchOfficeTimings();
+        }
+      }
+    } catch (e) {
+      print('Error fetching teacher ID: $e');
+    }
+  }
+
+  Future<void> _fetchOfficeTimings() async {
+    try {
+      if (_teacherId == null) return;
+      
+      final timingDoc = await _firestore
+          .collection('teachers')
+          .doc(_teacherId)
+          .collection('office_timings')
+          .doc('current')
+          .get();
+
+      if (timingDoc.exists) {
+        setState(() {
+          _officeTimings = timingDoc.data();
+        });
+        print('Office timings loaded: $_officeTimings'); // Debug log
+      } else {
+        print('No office timings found for teacher: $_teacherId'); // Debug log
+      }
+    } catch (e) {
+      print('Error fetching office timings: $e');
+    }
+  }
+
+  String _determineAttendanceStatus(DateTime checkInTime) {
+    if (_officeTimings == null) {
+      print('No office timings available, using default logic'); // Debug log
+      return checkInTime.hour < 9 ? 'On Time' : 'Late'; // Default logic
+    }
+
+    try {
+      final lateAfterTime = (_officeTimings!['lateAfterTime'] as Timestamp).toDate();
+      final lateAfterTimeForToday = DateTime(
+        checkInTime.year,
+        checkInTime.month,
+        checkInTime.day,
+        lateAfterTime.hour,
+        lateAfterTime.minute,
+      );
+
+      final isLate = checkInTime.isAfter(lateAfterTimeForToday);
+      print('Check-in time: ${checkInTime.toString()}, Late after: ${lateAfterTimeForToday.toString()}, Is late: $isLate'); // Debug log
+      return isLate ? 'Late' : 'On Time';
+    } catch (e) {
+      print('Error determining attendance status: $e'); // Debug log
+      return checkInTime.hour < 9 ? 'On Time' : 'Late'; // Fallback to default logic
     }
   }
 
@@ -163,6 +245,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
   Future<void> _updateCheckInStatus(DateTime punchTime, Position location) async {
     try {
       final timestamp = Timestamp.fromDate(punchTime);
+      final status = _determineAttendanceStatus(punchTime);
+      
       await _firestore.collection('students').doc(_userId).set({
         'isCheckedIn': true,
         'checkInTime': timestamp,
@@ -170,7 +254,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
           'latitude': location.latitude,
           'longitude': location.longitude,
         },
-        'status': punchTime.hour < 9 ? 'On Time' : 'Late',
+        'status': status,
         'checkOutTime': null,
         'totalHours': null,
         'checkOutLocation': null,
@@ -193,6 +277,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
         totalHours = "${hours}h ${minutes}m";
       }
 
+      final status = _determineAttendanceStatus(_checkInDateTime!);
+
       await _firestore.collection('students').doc(_userId).set({
         'isCheckedIn': false,
         'checkOutTime': timestamp,
@@ -213,7 +299,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
         'checkOutLocation': {'latitude': location.latitude, 'longitude': location.longitude},
         'totalHours': totalHours,
         'date': Timestamp.fromDate(punchTime),
-        'status': _checkInDateTime != null && _checkInDateTime!.hour < 9 ? 'On Time' : 'Late',
+        'status': status,
       });
     } catch (e) {
       print('Error updating check-out status: $e');

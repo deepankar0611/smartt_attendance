@@ -12,6 +12,8 @@ import '../student screen/password.dart';
 import 'FriendRequestPage.dart';
 import 'admin_edit_profile_sheet.dart';
 import 'leave_approve_page.dart';
+import 'employee_management_page.dart';
+
 class AdminProfilePage extends StatefulWidget {
   final String? adminId;
 
@@ -24,14 +26,10 @@ class AdminProfilePage extends StatefulWidget {
 class _AdminProfilePageState extends State<AdminProfilePage> {
   String? _profileImageUrl;
   String _name = "Admin User";
-  String _role = "System Administrator";
-  String _department = "IT Department";
   String _location = "Head Office";
   String _mobile = "7479519946";
   String _email = "admin@example.com";
   String _joinDate = "01-01-2023";
-  String _adminLevel = "Admin";
-  String _adminId = "";
   final Map<String, int> _stats = {
     'employees': 0,
     'projects': 12,
@@ -70,26 +68,19 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
 
         setState(() {
           _name = data['name'] ?? "Admin User";
-          _role = data['role'] ?? "System Administrator";
-          _department = data['department'] ?? "IT Department";
           _location = data['location'] ?? "Head Office";
           _mobile = data['mobile'] ?? "7479519946";
           _email = data['email'] ?? "admin@example.com";
           _joinDate = formattedJoinDate;
-          _adminLevel = data['adminLevel'] ?? "Admin";
-          _adminId = "A-" + _userId.substring(0, 6);
           _profileImageUrl = data['profileImageUrl'];
         });
       } else {
         await _firestore.collection('teachers').doc(_userId).set({
           'name': _name,
-          'role': _role,
-          'department': _department,
           'location': _location,
           'mobile': _mobile,
           'email': _auth.currentUser?.email ?? 'admin@example.com',
           'joinDate': _joinDate,
-          'adminLevel': _adminLevel,
           'createdAt': FieldValue.serverTimestamp(),
           'isEmailVerified': _auth.currentUser?.emailVerified ?? false,
           'profileImageUrl': null,
@@ -250,11 +241,8 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
               ),
               child: AdminEditProfileSheet(
                 initialName: _name,
-                initialRole: _role,
-                initialDepartment: _department,
                 initialLocation: _location,
                 initialMobile: _mobile,
-                initialAdminLevel: _adminLevel,
               ),
             ),
           ),
@@ -265,21 +253,15 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
     if (result != null) {
       setState(() {
         _name = result['name'] ?? _name;
-        _role = result['role'] ?? _role;
-        _department = result['department'] ?? _department;
         _location = result['location'] ?? _location;
         _mobile = result['mobile'] ?? _mobile;
-        _adminLevel = result['adminLevel'] ?? _adminLevel;
       });
 
       try {
         await _firestore.collection('teachers').doc(_userId).update({
           'name': _name,
-          'role': _role,
-          'department': _department,
           'location': _location,
           'mobile': _mobile,
-          'adminLevel': _adminLevel,
         });
         _showSnackBar('Admin profile updated successfully');
       } catch (e) {
@@ -303,82 +285,86 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
   }
 
   void _navigateToEmployeeList() {
-    _showSnackBar('Employee list feature to be implemented');
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const EmployeeManagementPage()),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    const Color baseColor = Colors.green;
-    final Color gradientStart = baseColor;
-    final Color gradientEnd = Color.fromRGBO(0, 255, 0, 0.8);
-
     return Scaffold(
       backgroundColor: Colors.grey[100],
       appBar: AppBar(
         backgroundColor: Colors.green.shade900,
         elevation: 0,
-        toolbarHeight: 5,
+        toolbarHeight: 0,
       ),
-      body: Column(
+      body: Stack(
         children: [
-          _buildProfileHeader(gradientStart, gradientEnd),
-          Expanded(
-            child: SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
-              child: Column(
-                children: [
-                  const SizedBox(height: 24),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                    child: _buildAdminInfoCard(),
-                  ),
-                  const SizedBox(height: 24),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                    child: _buildUserStatsRow(),
-                  ),
-                  const SizedBox(height: 24),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                    child: _buildOptionsCard(baseColor),
-                  ),
-                  const SizedBox(height: 40),
+          // Gradient background container
+          Container(
+            height: 300,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topRight,
+                end: Alignment.bottomLeft,
+                colors: [
+                  Colors.green.shade900,
+                  Colors.green.shade800,
                 ],
               ),
             ),
           ),
+          // Scrollable content
+          CustomScrollView(
+            physics: const BouncingScrollPhysics(),
+            slivers: [
+              SliverToBoxAdapter(
+                child: Column(
+                  children: [
+                    _buildProfileHeader(),
+                    const SizedBox(height: 24),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: _buildAdminInfoCard(),
+                    ),
+                    const SizedBox(height: 24),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: _buildUserStatsRow(),
+                    ),
+                    const SizedBox(height: 24),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: _buildOptionsCard(),
+                    ),
+                    const SizedBox(height: 40),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          // Floating action button
+          Positioned(
+            right: 24,
+            bottom: 24,
+            child: FloatingActionButton(
+              onPressed: _logout,
+              backgroundColor: Colors.green.shade900,
+              elevation: 4,
+              child: const Icon(Icons.logout, color: Colors.white),
+            ),
+          ),
         ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _logout,
-        backgroundColor: Colors.green.shade900,
-        child: const Icon(Icons.logout, color: Colors.white),
       ),
     );
   }
 
-  Widget _buildProfileHeader(Color gradientStart, Color gradientEnd) {
+  Widget _buildProfileHeader() {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 30, horizontal: 20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topRight,
-          end: Alignment.bottomLeft,
-          colors: [
-            const Color(0xFF1B5E20),
-            Color.fromRGBO(27, 94, 32, 0.8),
-          ],
-        ),
-        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(30)),
-        boxShadow: [
-          BoxShadow(
-            color: Color.fromRGBO(0, 0, 0, 0.15),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
       child: Column(
         children: [
           Stack(
@@ -391,12 +377,19 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
                   shape: BoxShape.circle,
                   gradient: LinearGradient(
                     colors: [
-                      Color.fromRGBO(0, 255, 0, 0.9),
-                      Color.fromRGBO(0, 255, 0, 0.7),
+                      Colors.green.shade400,
+                      Colors.green.shade300,
                     ],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.2),
+                      blurRadius: 10,
+                      spreadRadius: 2,
+                    ),
+                  ],
                 ),
               ),
               Hero(
@@ -409,7 +402,14 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
                       height: 120,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 2),
+                        border: Border.all(color: Colors.white, width: 3),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.2),
+                            blurRadius: 8,
+                            spreadRadius: 1,
+                          ),
+                        ],
                         image: DecorationImage(
                           fit: BoxFit.cover,
                           image: _profileImageUrl != null && _profileImageUrl!.isNotEmpty
@@ -422,20 +422,27 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
                       onTap: _isUploading ? null : _pickAndUploadImage,
                       child: Container(
                         padding: const EdgeInsets.all(4),
-                        decoration: const BoxDecoration(
+                        decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: Colors.white,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.2),
+                              blurRadius: 4,
+                              spreadRadius: 1,
+                            ),
+                          ],
                         ),
                         child: _isUploading
                             ? const CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
-                        )
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
+                              )
                             : const Icon(
-                          Icons.edit,
-                          size: 20,
-                          color: Colors.black,
-                        ),
+                                Icons.edit,
+                                size: 20,
+                                color: Colors.black,
+                              ),
                       ),
                     ),
                   ],
@@ -445,10 +452,17 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
           ),
           const SizedBox(height: 20),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
             decoration: BoxDecoration(
-              color: Color.fromRGBO(0, 0, 0, 0.2),
-              borderRadius: BorderRadius.circular(20),
+              color: Colors.white.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(25),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 8,
+                  spreadRadius: 1,
+                ),
+              ],
             ),
             child: Text(
               _name,
@@ -456,57 +470,31 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
                 fontSize: 28,
                 fontWeight: FontWeight.w700,
                 color: Colors.white,
+                letterSpacing: 0.5,
               ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Color.fromRGBO(255, 255, 255, 0.2),
-                  borderRadius: BorderRadius.circular(15),
-                ),
-                child: Text(
-                  "ID: $_adminId",
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            _role,
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w500,
-              color: Colors.white,
-              letterSpacing: 0.5,
             ),
           ),
           const SizedBox(height: 12),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             decoration: BoxDecoration(
-              color: Color.fromRGBO(255, 255, 255, 0.1),
-              borderRadius: BorderRadius.circular(15),
+              color: Colors.white.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.3),
+                width: 1,
+              ),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.location_on, color: Colors.white70, size: 18),
-                const SizedBox(width: 6),
+                const Icon(Icons.location_on, color: Colors.white, size: 18),
+                const SizedBox(width: 8),
                 Text(
                   _location,
                   style: const TextStyle(
                     fontSize: 14,
-                    color: Colors.white70,
+                    color: Colors.white,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -520,26 +508,24 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
 
   Widget _buildAdminInfoCard() {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Color.fromRGBO(0, 0, 0, 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
+            color: Colors.grey.withOpacity(0.1),
+            blurRadius: 15,
+            offset: const Offset(0, 5),
           ),
         ],
       ),
       child: Column(
         children: [
-          _buildInfoRow(Icons.apartment, "Firm", _department),
-          const Divider(height: 16),
           _buildInfoRow(Icons.email, "Email", _email),
-          const Divider(height: 16),
+          const Divider(height: 24),
           _buildInfoRow(Icons.phone, "Mobile", _mobile),
-          const Divider(height: 16),
+          const Divider(height: 24),
           _buildInfoRow(Icons.calendar_today, "Join Date", _joinDate),
         ],
       ),
@@ -551,12 +537,19 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: [
-          Icon(icon, size: 18, color: Colors.grey[700]),
-          const SizedBox(width: 12),
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.green.shade50,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, size: 20, color: Colors.green.shade700),
+          ),
+          const SizedBox(width: 16),
           Text(
             "$label: ",
             style: TextStyle(
-              fontSize: 14,
+              fontSize: 15,
               fontWeight: FontWeight.w600,
               color: Colors.grey[800],
             ),
@@ -564,9 +557,10 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
           Expanded(
             child: Text(
               value,
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w400,
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+                color: Colors.grey[700],
               ),
               textAlign: TextAlign.right,
             ),
@@ -578,96 +572,129 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
 
   Widget _buildUserStatsRow() {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Color.fromRGBO(0, 0, 0, 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
+            color: Colors.grey.withOpacity(0.1),
+            blurRadius: 15,
+            offset: const Offset(0, 5),
           ),
         ],
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: _stats.entries
-            .map(
-              (entry) => Expanded(
-            child: Column(
-              children: [
-                Text(
-                  entry.value.toString(),
-                  style: const TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
-                  ),
-                ),
-                Text(
-                  entry.key,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey[700],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        )
-            .toList(),
+        children: _stats.entries.map((entry) => _buildStatItem(entry)).toList(),
       ),
     );
   }
 
-  Widget _buildOptionsCard(Color baseColor) {
-    return Column(
-      children: [
-        _buildOptionButton(
-          icon: Icons.edit,
-          label: "Edit Profile",
-          onTap: _showEditProfileSheet,
-        ),
-        const SizedBox(height: 12),
-        _buildOptionButton(
-          icon: Icons.event_note,
-          label: "Manage Leaves",
-          onTap: _navigateToManageLeaves, // Navigate to AdminDashboardPage
-        ),
-        const SizedBox(height: 16),
-        _buildOptionButton(
-          icon: Icons.settings,
-          label: "Settings",
-          onTap: _changePassword,
-        ),
-        const SizedBox(height: 16),
-        _buildOptionButton(
-          icon: Icons.ad_units,
-          label: "Add Employee",
-          onTap: _navigateToEmployeeList,
-        ),
-        const SizedBox(height: 16),
-        _buildOptionButton(
-          icon: Icons.delete_forever,
-          label: "Delete Account",
-          onTap: () async {
-            final result = await Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const DeleteAccountPage(userType: 'teacher'),
+  Widget _buildStatItem(MapEntry<String, int> entry) {
+    return Expanded(
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.green.shade50,
+              shape: BoxShape.circle,
+            ),
+            child: Text(
+              entry.value.toString(),
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: Colors.green.shade700,
               ),
-            );
-            if (result == 'delete') {
-              _showSnackBar('Account deleted successfully');
-              Navigator.pushReplacement(
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            entry.key,
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey[700],
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOptionsCard() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.1),
+            blurRadius: 15,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Account Settings',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey[800],
+            ),
+          ),
+          const SizedBox(height: 16),
+          _buildOptionButton(
+            icon: Icons.edit,
+            label: "Edit Profile",
+            onTap: _showEditProfileSheet,
+          ),
+          const SizedBox(height: 12),
+          _buildOptionButton(
+            icon: Icons.event_note,
+            label: "Manage Leaves",
+            onTap: _navigateToManageLeaves,
+          ),
+          const SizedBox(height: 12),
+          _buildOptionButton(
+            icon: Icons.people,
+            label: "Employee Management",
+            onTap: _navigateToEmployeeList,
+          ),
+          const SizedBox(height: 12),
+          _buildOptionButton(
+            icon: Icons.settings,
+            label: "Settings",
+            onTap: _changePassword,
+          ),
+          const SizedBox(height: 12),
+          _buildOptionButton(
+            icon: Icons.delete_forever,
+            label: "Delete Account",
+            onTap: () async {
+              final result = await Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => LoginScreen()),
+                MaterialPageRoute(
+                  builder: (context) => const DeleteAccountPage(userType: 'teacher'),
+                ),
               );
-            }
-          },
-        ),
-      ],
+              if (result == 'delete') {
+                _showSnackBar('Account deleted successfully');
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (context) => LoginScreen()),
+                );
+              }
+            },
+          ),
+        ],
+      ),
     );
   }
 
@@ -676,36 +703,51 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
     required String label,
     required VoidCallback onTap,
   }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: double.infinity,
-        height: 60,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: Color.fromRGBO(0, 0, 0, 0.2),
-              blurRadius: 8,
-              offset: const Offset(0, 4),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(15),
+        child: Container(
+          width: double.infinity,
+          height: 60,
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          decoration: BoxDecoration(
+            color: Colors.grey[50],
+            borderRadius: BorderRadius.circular(15),
+            border: Border.all(
+              color: Colors.grey.shade200,
+              width: 1,
             ),
-          ],
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: Colors.black, size: 24),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-                color: Colors.black,
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.green.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: Colors.green.shade700, size: 24),
               ),
-            ),
-          ],
+              const SizedBox(width: 12),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.grey[800],
+                ),
+              ),
+              const Spacer(),
+              Icon(
+                Icons.chevron_right,
+                color: Colors.grey[400],
+                size: 24,
+              ),
+            ],
+          ),
         ),
       ),
     );

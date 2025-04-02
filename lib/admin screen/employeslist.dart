@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:intl/intl.dart'; // Add this import for DateFormat
+import '../utils/attendance_utils.dart';
 
 class EmployeeAttendanceScreen extends StatefulWidget {
   @override
@@ -12,7 +13,7 @@ class EmployeeAttendanceScreen extends StatefulWidget {
 
 class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> with SingleTickerProviderStateMixin {
   bool _showDepartments = false;
-  String _selectedDepartment = 'Select Department';
+  String _selectedDepartment = 'All Departments';
   int _currentTabIndex = 0;
   TabController? _tabController;
 
@@ -73,8 +74,9 @@ class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> wit
       setState(() => _isLoading = true);
 
       // Get today's date at midnight for comparison
-      DateTime today = DateTime.now();
-      DateTime todayMidnight = DateTime(today.year, today.month, today.day);
+      DateTime now = DateTime.now();
+      DateTime todayStart = DateTime(now.year, now.month, now.day);
+      DateTime todayEnd = todayStart.add(const Duration(days: 1));
 
       // Step 1: Fetch the current teacher's friends subcollection
       QuerySnapshot friendsSnapshot = await _firestore
@@ -94,7 +96,7 @@ class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> wit
           .map((doc) => doc.get('friendId') as String)
           .toList();
 
-      // Step 2: Fetch attendance details for each friend from the 'students' collection
+      // Step 2: Fetch attendance details for each friend
       List<Map<String, dynamic>> loggedInList = [];
       List<Map<String, dynamic>> onTimeList = [];
       List<Map<String, dynamic>> lateList = [];
@@ -103,90 +105,125 @@ class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> wit
       Map<String, Map<String, dynamic>> jobStats = {};
 
       for (String friendUid in friendUids) {
+        // Fetch student document
         DocumentSnapshot studentDoc = await _firestore.collection('students').doc(friendUid).get();
-        if (studentDoc.exists) {
-          final data = studentDoc.data() as Map<String, dynamic>;
-          String job = data['job'] ?? 'Student';
+        if (!studentDoc.exists) continue;
 
-          // Initialize stats for this job if not already present
-          if (!jobStats.containsKey(job)) {
-            jobStats[job] = {
-              'total': 0,
-              'onTime': 0,
-              'late': 0,
-              'leave': 0,
-            };
-          }
+        final studentData = studentDoc.data() as Map<String, dynamic>;
+        String job = studentData['job'] ?? 'Student';
 
-          // Increment total count for this job
-          jobStats[job]!['total'] = (jobStats[job]!['total'] as int) + 1;
+        // Initialize stats for this job if not already present
+        if (!jobStats.containsKey(job)) {
+          jobStats[job] = {
+            'total': 0,
+            'onTime': 0,
+            'late': 0,
+            'leave': 0,
+          };
+        }
 
-          // Check if student has checked in today
-          if (data['checkInTime'] != null) {
-            Timestamp checkInTimestamp = data['checkInTime'] as Timestamp;
-            DateTime checkInDateTime = checkInTimestamp.toDate();
-            DateTime checkInMidnight = DateTime(checkInDateTime.year, checkInDateTime.month, checkInDateTime.day);
+        // Increment total count for this job
+        jobStats[job]!['total'] = (jobStats[job]!['total'] as int) + 1;
 
-            // Only process if check-in is from today
-            if (checkInMidnight.isAtSameMomentAs(todayMidnight)) {
-              // Extract check-in location
-              String checkInLocation = 'Not specified';
-              if (data['checkInLocation'] != null) {
-                double latitude = data['checkInLocation']['latitude']?.toDouble() ?? 0.0;
-                double longitude = data['checkInLocation']['longitude']?.toDouble() ?? 0.0;
-                if (latitude != 0.0 && longitude != 0.0) {
-                  checkInLocation = await _getAddressFromCoordinates(latitude, longitude);
-                }
-              }
+        // Query attendance collection for today's records
+        QuerySnapshot attendanceSnapshot = await _firestore
+            .collection('students')
+            .doc(friendUid)
+            .collection('attendance')
+            .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(todayStart))
+            .where('date', isLessThan: Timestamp.fromDate(todayEnd))
+            .get();
 
-              // Extract check-out time and location
-              String checkOutTime = 'Not checked out';
-              String checkOutLocation = 'Not specified';
-              if (data['checkOutTime'] != null) {
-                Timestamp checkOutTimestamp = data['checkOutTime'] as Timestamp;
-                DateTime checkOutDateTime = checkOutTimestamp.toDate();
-                checkOutTime = DateFormat('HH:mm').format(checkOutDateTime);
-              }
-              if (data['checkOutLocation'] != null) {
-                double latitude = data['checkOutLocation']['latitude']?.toDouble() ?? 0.0;
-                double longitude = data['checkOutLocation']['longitude']?.toDouble() ?? 0.0;
-                if (latitude != 0.0 && longitude != 0.0) {
-                  checkOutLocation = await _getAddressFromCoordinates(latitude, longitude);
-                }
-              }
+        print('Found ${attendanceSnapshot.docs.length} attendance records for student $friendUid');
 
-              // Format the check-in time
-              String loginTime = DateFormat('HH:mm').format(checkInDateTime);
+        if (attendanceSnapshot.docs.isNotEmpty) {
+          // Get today's attendance record
+          DocumentSnapshot attendanceDoc = attendanceSnapshot.docs.first;
+          Map<String, dynamic> attendanceData = attendanceDoc.data() as Map<String, dynamic>;
 
-              // Prepare employee data
-              Map<String, dynamic> employee = {
-                'name': data['name'] ?? 'Unknown',
-                'position': job,
-                'status': 'Regular',
-                'loginTime': loginTime,
-                'checkOutTime': checkOutTime,
-                'attendance': data['status'] ?? 'Unknown',
-                'avatar': _getAvatarColor(data['name']),
-                'checkInLocation': checkInLocation,
-                'checkOutLocation': checkOutLocation,
-              };
-
-              // Add to Logged In list
-              loggedInList.add(employee);
-
-              // Update job stats based on attendance
-              if (employee['attendance'] == 'On Time') {
-                jobStats[job]!['onTime'] = (jobStats[job]!['onTime'] as int) + 1;
-                onTimeList.add(employee);
-              } else if (employee['attendance'] == 'Late') {
-                jobStats[job]!['late'] = (jobStats[job]!['late'] as int) + 1;
-                lateList.add(employee);
-              }
+          // Extract check-in location
+          String checkInLocation = 'Not specified';
+          if (attendanceData['checkInLocation'] != null) {
+            double latitude = attendanceData['checkInLocation']['latitude']?.toDouble() ?? 0.0;
+            double longitude = attendanceData['checkInLocation']['longitude']?.toDouble() ?? 0.0;
+            if (latitude != 0.0 && longitude != 0.0) {
+              checkInLocation = await _getAddressFromCoordinates(latitude, longitude);
             }
-          } else {
-            // If no check-in time, assume they are on leave
-            jobStats[job]!['leave'] = (jobStats[job]!['leave'] as int) + 1;
           }
+
+          // Extract check-out location
+          String checkOutLocation = 'Not specified';
+          if (attendanceData['checkOutLocation'] != null) {
+            double latitude = attendanceData['checkOutLocation']['latitude']?.toDouble() ?? 0.0;
+            double longitude = attendanceData['checkOutLocation']['longitude']?.toDouble() ?? 0.0;
+            if (latitude != 0.0 && longitude != 0.0) {
+              checkOutLocation = await _getAddressFromCoordinates(latitude, longitude);
+            }
+          }
+
+          // Format check-in and check-out times
+          String loginTime = 'Not checked in';
+          String checkOutTime = 'Not checked out';
+          
+          if (attendanceData['checkInTime'] != null) {
+            Timestamp checkInTimestamp = attendanceData['checkInTime'] as Timestamp;
+            loginTime = DateFormat('HH:mm').format(checkInTimestamp.toDate());
+          }
+          
+          if (attendanceData['checkOutTime'] != null) {
+            Timestamp checkOutTimestamp = attendanceData['checkOutTime'] as Timestamp;
+            checkOutTime = DateFormat('HH:mm').format(checkOutTimestamp.toDate());
+          }
+
+          // Get attendance status
+          String status = attendanceData['status'] ?? 'Unknown';
+
+          // Calculate late duration if applicable
+          String? lateDuration;
+          if (status == 'Late' && attendanceData['checkInTime'] != null) {
+            // You might want to get the late after time from office settings
+            // For now, using a default of 9 AM
+            DateTime checkInTime = (attendanceData['checkInTime'] as Timestamp).toDate();
+            DateTime lateAfterTime = DateTime(
+              checkInTime.year,
+              checkInTime.month,
+              checkInTime.day,
+              9, // 9 AM
+              0,
+            );
+            if (checkInTime.isAfter(lateAfterTime)) {
+              Duration difference = checkInTime.difference(lateAfterTime);
+              lateDuration = '${difference.inHours}h ${difference.inMinutes.remainder(60)}m';
+            }
+          }
+
+          // Prepare employee data
+          Map<String, dynamic> employee = {
+            'name': studentData['name'] ?? 'Unknown',
+            'position': job,
+            'status': 'Regular',
+            'loginTime': loginTime,
+            'checkOutTime': checkOutTime,
+            'attendance': status,
+            'avatar': _getAvatarColor(studentData['name']),
+            'checkInLocation': checkInLocation,
+            'checkOutLocation': checkOutLocation,
+            'lateDuration': lateDuration,
+            'totalHours': attendanceData['totalHours'] ?? '0h 0m',
+          };
+
+          // Add to appropriate lists based on attendance status
+          loggedInList.add(employee);
+          if (status == 'On Time') {
+            jobStats[job]!['onTime'] = (jobStats[job]!['onTime'] as int) + 1;
+            onTimeList.add(employee);
+          } else if (status == 'Late') {
+            jobStats[job]!['late'] = (jobStats[job]!['late'] as int) + 1;
+            lateList.add(employee);
+          }
+        } else {
+          // If no attendance record for today, assume they are on leave
+          jobStats[job]!['leave'] = (jobStats[job]!['leave'] as int) + 1;
         }
       }
 
@@ -197,6 +234,8 @@ class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> wit
         _jobStats = jobStats;
         _isLoading = false;
       });
+
+      print('Loaded data: ${loggedInList.length} logged in, ${onTimeList.length} on time, ${lateList.length} late');
     } catch (e) {
       print('Error fetching attendance data: $e');
       setState(() => _isLoading = false);
@@ -781,11 +820,54 @@ class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> wit
   }
 
   Widget _buildEmployeeList(List<Map<String, dynamic>> data) {
+    // Filter data based on selected department
+    List<Map<String, dynamic>> filteredData = data.where((employee) {
+      if (_selectedDepartment == 'All Departments') {
+        return true;
+      }
+      
+      // Get department details for the employee's position
+      Map<String, dynamic> deptDetails = _getDepartmentDetails(employee['position']);
+      return deptDetails['title'] == _selectedDepartment;
+    }).toList();
+
+    if (filteredData.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.people_outline,
+              size: 64,
+              color: Colors.grey[400],
+            ),
+            SizedBox(height: 16),
+            Text(
+              'No employees found',
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.grey[600],
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            SizedBox(height: 8),
+            Text(
+              'Try selecting a different department',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey[500],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     return ListView.builder(
       padding: EdgeInsets.symmetric(horizontal: 12),
-      itemCount: data.length,
+      itemCount: filteredData.length,
       itemBuilder: (context, index) {
-        final employee = data[index];
+        final employee = filteredData[index];
         final bool isLate = employee['attendance'] == 'Late';
 
         return Card(

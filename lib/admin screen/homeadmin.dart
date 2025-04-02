@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:smartt_attendance/admin%20screen/project_list_screen.dart';
+import '../utils/attendance_utils.dart';
 
 import 'addgroup.dart'; // ProjectAssignmentScreen
 import 'employee_list_screen.dart';
@@ -98,7 +99,6 @@ class _DashboardHomeState extends State<DashboardHome> with SingleTickerProvider
           .collection('friends')
           .get();
       int totalFriends = friendsSnapshot.docs.length;
-      print('Total friends: $totalFriends');
 
       // Calculate total friends change
       double totalFriendsChange = 0.0;
@@ -116,7 +116,6 @@ class _DashboardHomeState extends State<DashboardHome> with SingleTickerProvider
 
       if (previousFriendsSnapshot.docs.isNotEmpty) {
         int previousFriendsCount = previousFriendsSnapshot.docs.first.get('count') ?? 0;
-        print('Previous friends count: $previousFriendsCount');
         if (previousFriendsCount > 0) {
           totalFriendsChange = ((totalFriends - previousFriendsCount) / previousFriendsCount) * 100;
         }
@@ -125,32 +124,51 @@ class _DashboardHomeState extends State<DashboardHome> with SingleTickerProvider
       List<String> friendUids = friendsSnapshot.docs
           .map((doc) => doc.get('friendId') as String)
           .toList();
-      print('Friend UIDs: $friendUids');
 
       int presentToday = 0;
       int onLeave = 0;
-      DateTime today = DateTime(2025, 4, 2); // Set to April 2, 2025
+      DateTime today = DateTime.now();
+      today = DateTime(today.year, today.month, today.day);
 
       for (String friendUid in friendUids) {
         // Fetch student document
         DocumentSnapshot studentDoc = await _firestore.collection('students').doc(friendUid).get();
         if (studentDoc.exists) {
           var data = studentDoc.data() as Map<String, dynamic>;
-          print('Student data for $friendUid: $data');
 
           // Check for present today
           if (data.containsKey('checkInTime') && data['checkInTime'] != null) {
             try {
               Timestamp checkInTimestamp = data['checkInTime'] as Timestamp;
               DateTime checkInDate = checkInTimestamp.toDate();
-              if (DateTime(checkInDate.year, checkInDate.month, checkInDate.day) == today) {
-                presentToday++;
+              
+              if (DateTime(checkInDate.year, checkInDate.month, checkInDate.day).isAtSameMomentAs(today)) {
+                // Get check-out time if exists
+                DateTime? checkOutDate;
+                if (data.containsKey('checkOutTime') && data['checkOutTime'] != null) {
+                  Timestamp checkOutTimestamp = data['checkOutTime'] as Timestamp;
+                  checkOutDate = checkOutTimestamp.toDate();
+                }
+
+                // Calculate attendance status
+                final checkInTime = checkInDate;
+                final checkOutTime = checkOutDate;
+
+                final status = await AttendanceUtils.calculateAttendanceStatus(
+                  checkInTime,
+                  checkOutTime,
+                  teacherId: _userId,
+                );
+
+                if (status == AttendanceStatus.onTime) {
+                  presentToday++;
+                } else if (status == AttendanceStatus.late) {
+                  // Handle late attendance
+                }
               }
             } catch (e) {
               print('Error parsing checkInTime for $friendUid: $e');
             }
-          } else {
-            print('No checkInTime found for $friendUid');
           }
 
           // Fetch leave data
@@ -159,12 +177,9 @@ class _DashboardHomeState extends State<DashboardHome> with SingleTickerProvider
               .doc(friendUid)
               .collection('leaves')
               .get();
-          print('Leave records for $friendUid: ${leaveSnapshot.docs.length}');
 
           for (var leaveDoc in leaveSnapshot.docs) {
             var leaveData = leaveDoc.data() as Map<String, dynamic>;
-            print('Leave data: $leaveData');
-
             if (leaveData.containsKey('startDate') && leaveData.containsKey('endDate')) {
               try {
                 Timestamp startTimestamp = leaveData['startDate'] as Timestamp;
@@ -173,21 +188,15 @@ class _DashboardHomeState extends State<DashboardHome> with SingleTickerProvider
                 DateTime startDate = startTimestamp.toDate();
                 DateTime endDate = endTimestamp.toDate();
 
-                // Check if today is between startDate and endDate (inclusive)
                 if (today.isAfter(startDate.subtract(Duration(days: 1))) &&
                     today.isBefore(endDate.add(Duration(days: 1)))) {
                   onLeave++;
-                  print('Leave counted for $friendUid on $today');
                 }
               } catch (e) {
                 print('Error parsing leave dates for $friendUid: $e');
               }
-            } else {
-              print('Missing startDate or endDate for leave record in $friendUid');
             }
           }
-        } else {
-          print('Student document for $friendUid does not exist');
         }
       }
 
@@ -196,13 +205,12 @@ class _DashboardHomeState extends State<DashboardHome> with SingleTickerProvider
       DateTime yesterday = today.subtract(Duration(days: 1));
       QuerySnapshot yesterdayAttendanceSnapshot = await _firestore
           .collection('attendanceRecords')
-          .where('date', isEqualTo: Timestamp.fromDate(DateTime(yesterday.year, yesterday.month, yesterday.day)))
+          .where('date', isEqualTo: Timestamp.fromDate(yesterday))
           .limit(1)
           .get();
 
       if (yesterdayAttendanceSnapshot.docs.isNotEmpty) {
         int yesterdayPresent = yesterdayAttendanceSnapshot.docs.first.get('present') ?? 0;
-        print('Yesterday present: $yesterdayPresent');
         if (yesterdayPresent > 0) {
           presentTodayChange = ((presentToday - yesterdayPresent) / yesterdayPresent) * 100;
         }
@@ -211,9 +219,7 @@ class _DashboardHomeState extends State<DashboardHome> with SingleTickerProvider
       // Fetch active projects
       QuerySnapshot projectsSnapshot = await _firestore.collection('projects').get();
       int activeProjects = projectsSnapshot.docs.length;
-      print('Active projects: $activeProjects');
 
-      // Update state with fetched data
       setState(() {
         _summaryData = {
           'totalEmployees': totalFriends,
@@ -224,7 +230,6 @@ class _DashboardHomeState extends State<DashboardHome> with SingleTickerProvider
           'activeProjects': activeProjects,
         };
         _isLoading = false;
-        print('Summary data updated: $_summaryData');
       });
     } catch (e) {
       print('Error fetching summary data: $e');
