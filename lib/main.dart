@@ -7,7 +7,6 @@ import 'package:smartt_attendance/student%20screen/login_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as sp;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'firebase_options.dart';
-import 'models/bottom_sheet.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();

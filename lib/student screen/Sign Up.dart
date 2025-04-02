@@ -31,13 +31,15 @@ class _SignUpState extends State<SignUp> {
     setState(() => _isLoading = true);
 
     try {
-      UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
+      UserCredential userCredential =
+          await _auth.createUserWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
 
       String uid = userCredential.user!.uid;
-      String collectionName = _selectedUserType == UserType.student ? 'students' : 'teachers';
+      String collectionName =
+          _selectedUserType == UserType.student ? 'students' : 'teachers';
 
       await _firestore.collection(collectionName).doc(uid).set({
         'name': _nameController.text.trim(),
@@ -51,7 +53,6 @@ class _SignUpState extends State<SignUp> {
 
       _showSnackBar('Registration successful! Please verify your email.');
       Navigator.pop(context);
-
     } on FirebaseAuthException catch (e) {
       _handleRegistrationError(e);
     } finally {
@@ -146,7 +147,7 @@ class _SignUpState extends State<SignUp> {
               Text(
                 'Sign up to get started',
                 style: TextStyle(
-                  color: Colors.white.withOpacity(0.7),
+                  color: Colors.white.withValues(alpha: 0.7 * 255),
                   fontSize: 16,
                 ),
               ),
@@ -154,7 +155,7 @@ class _SignUpState extends State<SignUp> {
           ),
           Container(
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
+              color: Colors.white.withValues(alpha: 0.2 * 255),
               borderRadius: BorderRadius.circular(15),
             ),
             padding: const EdgeInsets.all(10),
@@ -303,7 +304,8 @@ class _SignUpState extends State<SignUp> {
           ),
           labelStyle: TextStyle(color: Colors.black),
           hintStyle: TextStyle(color: Colors.white),
-          contentPadding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
+          contentPadding:
+              const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
         ),
       ),
     );
@@ -373,17 +375,17 @@ class _SignUpState extends State<SignUp> {
       ),
       child: _isLoading
           ? CircularProgressIndicator(
-        color: Colors.white,
-        strokeWidth: 3,
-      )
+              color: Colors.white,
+              strokeWidth: 3,
+            )
           : Text(
-        'REGISTER',
-        style: TextStyle(
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
-          letterSpacing: 1.2,
-        ),
-      ),
+              'REGISTER',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.2,
+              ),
+            ),
     );
   }
 
@@ -419,7 +421,8 @@ class _SignUpState extends State<SignUp> {
     );
   }
 
-  Widget _buildSocialButton(IconData icon, Color color, VoidCallback onPressed) {
+  Widget _buildSocialButton(
+      IconData icon, Color color, VoidCallback onPressed) {
     return ElevatedButton(
       onPressed: onPressed,
       style: ElevatedButton.styleFrom(
