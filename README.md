@@ -54,14 +54,14 @@ A modern, location-based attendance management system built with Flutter and Fir
 <div align="center">
 <table>
   <tr>
-    <td><img src="screenshots/login.png" width="200"/></td>
-    <td><img src="screenshots/student_dashboard.png" width="200"/></td>
-    <td><img src="screenshots/attendance_marking.png" width="200"/></td>
+    <td><img src="assets/screenshots/4.png" width="200"/></td>
+    <td><img src="assets/screenshots/1.png" width="200"/></td>
+    <td><img src="assets/screenshots/2.png" width="200"/></td>
   </tr>
   <tr>
-    <td><img src="screenshots/admin_dashboard.png" width="200"/></td>
-    <td><img src="screenshots/department_view.png" width="200"/></td>
-    <td><img src="screenshots/analytics.png" width="200"/></td>
+    <td><img src="assets/screenshots/3.png" width="200"/></td>
+    <td><img src="assets/screenshots/5.png" width="200"/></td>
+    <td><img src="assets/screenshots/6.png" width="200"/></td>
   </tr>
 </table>
 </div>
