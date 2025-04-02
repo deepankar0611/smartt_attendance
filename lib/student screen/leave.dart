@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'leave_history_page.dart'; // Import the new page
 
 class LeaveApplicationPage extends StatefulWidget {
   const LeaveApplicationPage({Key? key}) : super(key: key);
@@ -16,15 +19,21 @@ class _LeaveApplicationPageState extends State<LeaveApplicationPage> {
   String _selectedLeaveType = 'Casual Leave';
   final List<String> _leaveTypes = ['Casual Leave', 'Sick Leave', 'Vacation', 'Personal'];
 
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+
   @override
   void dispose() {
     _reasonController.dispose();
     super.dispose();
   }
+
   Future<void> _selectDate(BuildContext context, bool isStartDate) async {
     final DateTime? picked = await showDatePicker(
       context: context,
-      initialDate: isStartDate ? _startDate ?? DateTime.now() : _endDate ?? (_startDate ?? DateTime.now()).add(const Duration(days: 1)),
+      initialDate: isStartDate
+          ? _startDate ?? DateTime.now()
+          : _endDate ?? (_startDate ?? DateTime.now()).add(const Duration(days: 1)),
       firstDate: isStartDate ? DateTime.now() : (_startDate ?? DateTime.now()),
       lastDate: DateTime.now().add(const Duration(days: 365)),
       builder: (context, child) {
@@ -51,7 +60,6 @@ class _LeaveApplicationPageState extends State<LeaveApplicationPage> {
       setState(() {
         if (isStartDate) {
           _startDate = picked;
-          // If end date is before the new start date, update it
           if (_endDate != null && _endDate!.isBefore(_startDate!)) {
             _endDate = _startDate;
           }
@@ -62,26 +70,95 @@ class _LeaveApplicationPageState extends State<LeaveApplicationPage> {
     }
   }
 
-  void _submitApplication() {
+  Future<void> _submitApplication() async {
     if (_formKey.currentState!.validate()) {
-      // Here you would typically send the data to your backend
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: const [
-              Icon(Icons.check_circle, color: Colors.white),
-              SizedBox(width: 10),
-              Text('Leave application submitted successfully'),
-            ],
+      try {
+        final String? userId = _auth.currentUser?.uid;
+        if (userId == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: const [
+                  Icon(Icons.error, color: Colors.white),
+                  SizedBox(width: 10),
+                  Text('User not authenticated'),
+                ],
+              ),
+              backgroundColor: Colors.red,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+          );
+          return;
+        }
+
+        final leaveData = {
+          'studentId': userId,
+          'leaveType': _selectedLeaveType,
+          'startDate': Timestamp.fromDate(_startDate!),
+          'endDate': Timestamp.fromDate(_endDate!),
+          'reason': _reasonController.text.trim(),
+          'status': 'Pending',
+          'submittedAt': FieldValue.serverTimestamp(),
+        };
+
+        await _firestore
+            .collection('students')
+            .doc(userId)
+            .collection('leaves')
+            .add(leaveData);
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: const [
+                Icon(Icons.check_circle, color: Colors.white),
+                SizedBox(width: 10),
+                Text('Leave application submitted successfully'),
+              ],
+            ),
+            backgroundColor: const Color(0xFF2E7D32),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
           ),
-          backgroundColor: const Color(0xFF2E7D32),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
+        );
+
+        setState(() {
+          _startDate = null;
+          _endDate = null;
+          _reasonController.clear();
+          _selectedLeaveType = 'Casual Leave';
+        });
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.error, color: Colors.white),
+                const SizedBox(width: 10),
+                Text('Failed to submit leave application: $e'),
+              ],
+            ),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
           ),
-        ),
-      );
+        );
+      }
     }
+  }
+
+  void _navigateToLeaveHistory() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const LeaveHistoryPage()),
+    );
   }
 
   @override
@@ -116,9 +193,7 @@ class _LeaveApplicationPageState extends State<LeaveApplicationPage> {
         actions: [
           IconButton(
             icon: const Icon(Icons.history, color: Colors.white),
-            onPressed: () {
-              // Navigate to leave history
-            },
+            onPressed: _navigateToLeaveHistory, // Navigate to LeaveHistoryPage
           ),
         ],
       ),
@@ -402,9 +477,9 @@ class _LeaveApplicationPageState extends State<LeaveApplicationPage> {
                             margin: const EdgeInsets.only(top: 12),
                             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                             decoration: BoxDecoration(
-                              color: Colors.green.withOpacity(0.1),
+                              color: Colors.green.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.green.withOpacity(0.3)),
+                              border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
                             ),
                             child: Row(
                               children: [

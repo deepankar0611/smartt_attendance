@@ -33,8 +33,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
   Position? _checkInLocation;
   Position? _checkOutLocation;
 
-  // Profile picture URL
+  // User data from Firestore
+  String? _userName;
   String? _profileImageUrl;
+  String? _email;
+  String? _mobile;
 
   @override
   void initState() {
@@ -53,8 +56,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
       curve: Curves.easeInOut,
     );
     _animationController.forward();
-    _initializeUserData();
-    _fetchProfilePicture();
+    _fetchUserData(); // Fetch user data from Firestore
     _requestLocationPermission();
     _loadCurrentStatus(); // Load initial status
   }
@@ -92,35 +94,37 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
     return await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
   }
 
-  Future<void> _initializeUserData() async {
-    try {
-      DocumentSnapshot studentDoc = await _firestore.collection('students').doc(_userId).get();
-      if (!studentDoc.exists) {
-        await _firestore.collection('students').doc(_userId).set({
-          'createdAt': FieldValue.serverTimestamp(),
-          'email': _auth.currentUser?.email ?? 'unknown',
-          'isEmailVerified': _auth.currentUser?.emailVerified ?? false,
-          'mobile': '7479519946',
-          'name': 'Deepankar',
-          'role': 'student',
-        });
-      }
-    } catch (e) {
-      print('Error initializing student data: $e');
-    }
-  }
-
-  Future<void> _fetchProfilePicture() async {
+  Future<void> _fetchUserData() async {
     try {
       DocumentSnapshot userDoc = await _firestore.collection('students').doc(_userId).get();
       if (userDoc.exists) {
         final data = userDoc.data() as Map<String, dynamic>;
         setState(() {
+          _userName = data['name'] ?? 'User';
+          _email = data['email'] ?? _auth.currentUser?.email ?? 'unknown';
+          _mobile = data['mobile'] ?? 'Not provided';
           _profileImageUrl = data['profileImageUrl'];
+        });
+      } else {
+        // If no document exists, create a basic one with email from auth
+        await _firestore.collection('students').doc(_userId).set({
+          'createdAt': FieldValue.serverTimestamp(),
+          'email': _auth.currentUser?.email ?? 'unknown',
+          'role': 'student',
+        });
+        setState(() {
+          _userName = 'User'; // Default name until updated
+          _email = _auth.currentUser?.email ?? 'unknown';
+          _mobile = 'Not provided';
         });
       }
     } catch (e) {
-      print('Error fetching profile picture: $e');
+      print('Error fetching user data: $e');
+      setState(() {
+        _userName = 'User'; // Fallback in case of error
+        _email = _auth.currentUser?.email ?? 'unknown';
+        _mobile = 'Not provided';
+      });
     }
   }
 
@@ -136,7 +140,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
     }
   }
 
-  // Load the current check-in status from Firestore
   Future<void> _loadCurrentStatus() async {
     try {
       DocumentSnapshot userDoc = await _firestore.collection('students').doc(_userId).get();
@@ -162,15 +165,15 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
       final timestamp = Timestamp.fromDate(punchTime);
       await _firestore.collection('students').doc(_userId).set({
         'isCheckedIn': true,
-        'checkInTime': timestamp, // Store as Timestamp
+        'checkInTime': timestamp,
         'checkInLocation': {
           'latitude': location.latitude,
           'longitude': location.longitude,
         },
         'status': punchTime.hour < 9 ? 'On Time' : 'Late',
-        'checkOutTime': null,      // Reset check-out time
-        'totalHours': null,        // Reset total hours
-        'checkOutLocation': null,  // Reset check-out location
+        'checkOutTime': null,
+        'totalHours': null,
+        'checkOutLocation': null,
         'lastUpdated': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
     } catch (e) {
@@ -192,21 +195,21 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
 
       await _firestore.collection('students').doc(_userId).set({
         'isCheckedIn': false,
-        'checkOutTime': timestamp, // Store as Timestamp
+        'checkOutTime': timestamp,
         'checkOutLocation': {
           'latitude': location.latitude,
           'longitude': location.longitude,
         },
-        'totalHours': totalHours, // Update total hours
+        'totalHours': totalHours,
         'lastUpdated': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 
       await _saveAttendance({
-        'checkInTime': _checkInTimestamp, // Store as Timestamp
+        'checkInTime': _checkInTimestamp,
         'checkInLocation': _checkInLocation != null
             ? {'latitude': _checkInLocation!.latitude, 'longitude': _checkInLocation!.longitude}
             : null,
-        'checkOutTime': timestamp, // Store as Timestamp
+        'checkOutTime': timestamp,
         'checkOutLocation': {'latitude': location.latitude, 'longitude': location.longitude},
         'totalHours': totalHours,
         'date': Timestamp.fromDate(punchTime),
@@ -228,8 +231,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
       _isCheckedIn = true;
       _checkInDateTime = punchTime;
       _checkInTimestamp = Timestamp.fromDate(punchTime);
-      _checkOutTimestamp = null; // Reset in UI
-      _totalHours = null;       // Reset in UI
+      _checkOutTimestamp = null;
+      _totalHours = null;
       _isShowingBottomSheet = false;
       _isBlurred = false;
     });
@@ -252,7 +255,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
 
     setState(() {
       _checkOutTimestamp = Timestamp.fromDate(punchTime);
-      _totalHours = totalHours; // Update with calculated value
+      _totalHours = totalHours;
       _isCheckedIn = false;
       _checkInDateTime = null;
       _checkInTimestamp = null;
@@ -419,7 +422,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Hey Deepankar!',
+                'Hey $_userName!',
                 style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.grey[800], letterSpacing: -0.5),
               ),
               const SizedBox(height: 4),

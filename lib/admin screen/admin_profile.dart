@@ -6,12 +6,12 @@ import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
-
 import '../student screen/delete_account_page.dart';
 import '../student screen/login_screen.dart';
 import '../student screen/password.dart';
 import 'FriendRequestPage.dart';
 import 'admin_edit_profile_sheet.dart';
+import 'leave_approve_page.dart';
 class AdminProfilePage extends StatefulWidget {
   final String? adminId;
 
@@ -50,7 +50,6 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
     _userId = widget.adminId ?? _auth.currentUser?.uid ?? '';
     if (_userId.isEmpty) {
       print('No user is currently signed in.');
-      // Handle navigation to login student screen if needed
     } else {
       _fetchAdminProfile();
       _fetchSummaryData();
@@ -62,8 +61,7 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
       DocumentSnapshot userDoc = await _firestore.collection('teachers').doc(_userId).get();
       if (userDoc.exists) {
         final data = userDoc.data() as Map<String, dynamic>;
-        // Format the createdAt timestamp to "dd-MM-yyyy"
-        String formattedJoinDate = "01-01-2023"; // Default value
+        String formattedJoinDate = "01-01-2023";
         if (data['createdAt'] != null) {
           Timestamp createdAt = data['createdAt'] as Timestamp;
           DateTime dateTime = createdAt.toDate();
@@ -77,7 +75,7 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
           _location = data['location'] ?? "Head Office";
           _mobile = data['mobile'] ?? "7479519946";
           _email = data['email'] ?? "admin@example.com";
-          _joinDate = formattedJoinDate; // Use the formatted createdAt
+          _joinDate = formattedJoinDate;
           _adminLevel = data['adminLevel'] ?? "Admin";
           _adminId = "A-" + _userId.substring(0, 6);
           _profileImageUrl = data['profileImageUrl'];
@@ -122,7 +120,6 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
 
   Future<void> _pickAndUploadImage() async {
     try {
-      // Show a dialog to choose between gallery and camera
       final ImageSource? source = await showDialog<ImageSource>(
         context: context,
         builder: (context) => AlertDialog(
@@ -140,25 +137,22 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
         ),
       );
 
-      if (source == null) return; // User canceled the dialog
+      if (source == null) return;
 
-      // Pick an image
       final XFile? pickedFile = await _picker.pickImage(
         source: source,
-        imageQuality: 80, // Reduce image quality to decrease file size
+        imageQuality: 80,
       );
 
-      if (pickedFile == null) return; // User canceled the picker
+      if (pickedFile == null) return;
 
       setState(() {
         _isUploading = true;
       });
 
-      // Create a unique file name using the user ID and timestamp
       String fileName = '$_userId-${DateTime.now().millisecondsSinceEpoch}.jpg';
       File imageFile = File(pickedFile.path);
 
-      // Delete the old image from Supabase if it exists
       if (_profileImageUrl != null && _profileImageUrl!.isNotEmpty) {
         String oldFileName = _profileImageUrl!.split('/').last;
         try {
@@ -168,20 +162,16 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
         }
       }
 
-      // Upload the image to Supabase
       await _supabase.storage
           .from('profile_pictures')
           .upload(fileName, imageFile, fileOptions: const FileOptions(upsert: true));
 
-      // Get the public URL of the uploaded image
       final String imageUrl = _supabase.storage.from('profile_pictures').getPublicUrl(fileName);
 
-      // Update Firestore with the image URL
       await _firestore.collection('teachers').doc(_userId).update({
         'profileImageUrl': imageUrl,
       });
 
-      // Update the UI
       setState(() {
         _profileImageUrl = imageUrl;
       });
@@ -210,7 +200,6 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
 
   Future<void> _logout() async {
     try {
-      // Show loading indicator
       showDialog(
         context: context,
         barrierDismissible: false,
@@ -229,7 +218,6 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
             (route) => false,
       );
     } catch (e) {
-      // Close loading dialog if open
       Navigator.of(context, rootNavigator: true).pop();
       _showSnackBar('Error logging out: $e');
     }
@@ -293,7 +281,6 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
     }
   }
 
-  // In your AdminProfilePage or wherever you want to trigger the password change
   void _changePassword() {
     showDialog(
       context: context,
@@ -301,8 +288,11 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
     );
   }
 
-  void _viewAuditLogs() {
-    _showSnackBar('Audit logs feature will be implemented soon');
+  void _navigateToManageLeaves() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const AdminDashboardPage()),
+    );
   }
 
   void _navigateToEmployeeList() {
@@ -537,7 +527,7 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
       ),
       child: Column(
         children: [
-          _buildInfoRow(Icons.apartment, "firm", _department),
+          _buildInfoRow(Icons.apartment, "Firm", _department),
           const Divider(height: 16),
           _buildInfoRow(Icons.email, "Email", _email),
           const Divider(height: 16),
@@ -629,14 +619,14 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
       children: [
         _buildOptionButton(
           icon: Icons.edit,
-          label: "Edit Profilee",
+          label: "Edit Profile",
           onTap: _showEditProfileSheet,
         ),
         const SizedBox(height: 12),
         _buildOptionButton(
-          icon: Icons.history,
-          label: "View Audit Logs",
-          onTap: _viewAuditLogs,
+          icon: Icons.event_note,
+          label: "Manage Leaves",
+          onTap: _navigateToManageLeaves, // Navigate to AdminDashboardPage
         ),
         const SizedBox(height: 16),
         _buildOptionButton(
@@ -647,7 +637,7 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
         const SizedBox(height: 16),
         _buildOptionButton(
           icon: Icons.ad_units,
-          label: "Add employee",
+          label: "Add Employee",
           onTap: _navigateToEmployeeList,
         ),
         const SizedBox(height: 16),
@@ -655,7 +645,6 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
           icon: Icons.delete_forever,
           label: "Delete Account",
           onTap: () async {
-            // Navigate to DeleteAccountPage for teacher
             final result = await Navigator.push(
               context,
               MaterialPageRoute(
@@ -663,9 +652,7 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
               ),
             );
             if (result == 'delete') {
-              // Navigate to login screen or home screen after deletion
               _showSnackBar('Account deleted successfully');
-              // Example: Navigate to login screen
               Navigator.pushReplacement(
                 context,
                 MaterialPageRoute(builder: (context) => LoginScreen()),

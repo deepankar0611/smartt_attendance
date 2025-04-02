@@ -2,14 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart'; // Added for Firebase Authentication
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:provider/provider.dart';
 
 import '../provider/attendance_history_notifier.dart';
 
 class AttendanceHistoryScreen extends StatelessWidget {
-  const AttendanceHistoryScreen({Key? key, required String userEmail, required List attendanceData}) : super(key: key); // Removed unused attendanceData parameter
+  const AttendanceHistoryScreen({Key? key, required String userEmail, required List attendanceData}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -33,23 +33,20 @@ class _AttendanceHistoryViewState extends State<_AttendanceHistoryView> with Tic
   late Future<List<Map<String, dynamic>>> _attendanceFuture;
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseAuth _auth = FirebaseAuth.instance; // Added for Firebase Authentication
-  late String _userId; // Use UID instead of email
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  late String _userId;
 
   @override
   void initState() {
     super.initState();
-    // Fetch the current user's UID
     _userId = _auth.currentUser?.uid ?? '';
     if (_userId.isEmpty) {
       print('No user is currently signed in.');
-      // Optionally, redirect to login student screen
-      // Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => LoginScreen()));
     }
     _animationController = AnimationController(vsync: this, duration: const Duration(milliseconds: 600));
     _animation = CurvedAnimation(parent: _animationController, curve: Curves.easeInOut);
     _animationController.forward();
-    _attendanceFuture = _fetchAttendanceByMonth(DateTime.now()); // Initial fetch
+    _attendanceFuture = _fetchAttendanceByMonth(DateTime.now());
   }
 
   @override
@@ -62,13 +59,13 @@ class _AttendanceHistoryViewState extends State<_AttendanceHistoryView> with Tic
     try {
       print('Fetching attendance for user: $_userId, month: ${DateFormat('MMMM yyyy').format(month)}');
       final snapshot = await _firestore
-          .collection('students') // Changed from 'users' to 'students'
-          .doc(_userId) // Use UID instead of email
+          .collection('students')
+          .doc(_userId)
           .collection('attendance')
           .where('date', isGreaterThanOrEqualTo: DateTime(month.year, month.month, 1))
           .where('date', isLessThan: DateTime(month.year, month.month + 1, 1))
           .get();
-      final data = snapshot.docs.map((doc) => doc.data() as Map<String, dynamic>).toList();
+      final data = snapshot.docs.map((doc) => doc.data()).toList();
       print('Fetched ${data.length} records');
       return data;
     } catch (e) {
@@ -79,7 +76,8 @@ class _AttendanceHistoryViewState extends State<_AttendanceHistoryView> with Tic
 
   Map<String, dynamic>? _getSelectedDayRecord(List<Map<String, dynamic>> attendance, DateTime selectedDate) {
     for (var record in attendance) {
-      DateTime recordDate = (record['date'] as Timestamp).toDate();
+      final date = record['date'];
+      DateTime recordDate = date is Timestamp ? date.toDate() : DateTime.now();
       if (isSameDay(recordDate, selectedDate)) {
         return record;
       }
@@ -118,9 +116,9 @@ class _AttendanceHistoryViewState extends State<_AttendanceHistoryView> with Tic
       }
     }
 
-    int avgMinutes = (attendance.isNotEmpty) ? (totalMinutes / attendance.length).round() : 0;
-    String avgHours = '${(avgMinutes ~/ 60)}h ${avgMinutes % 60}m';
-    String totalHoursFormatted = '${(totalMinutes ~/ 60)}h ${totalMinutes % 60}m';
+    int avgMinutes = attendance.isNotEmpty ? (totalMinutes / attendance.length).round() : 0;
+    String avgHours = '${avgMinutes ~/ 60}h ${avgMinutes % 60}m';
+    String totalHoursFormatted = '${totalMinutes ~/ 60}h ${totalMinutes % 60}m';
 
     return {
       'workdays': attendance.length,
@@ -149,11 +147,8 @@ class _AttendanceHistoryViewState extends State<_AttendanceHistoryView> with Tic
       List<Placemark> placemarks = await placemarkFromCoordinates(latitude, longitude);
       if (placemarks.isNotEmpty) {
         Placemark place = placemarks.first;
-        String? placeName = [
-          place.street,
-          place.name,
-          place.locality,
-        ].firstWhere((element) => element != null && element.isNotEmpty, orElse: () => null);
+        String? placeName = [place.street, place.name, place.locality]
+            .firstWhere((element) => element != null && element.isNotEmpty, orElse: () => null);
         return placeName ?? 'Unknown Location';
       }
       return 'Unknown Location';
@@ -396,6 +391,48 @@ class _AttendanceHistoryViewState extends State<_AttendanceHistoryView> with Tic
       itemCount: attendance.length,
       itemBuilder: (context, index) {
         final record = attendance[index];
+        // Extract date properly - ensuring it's converted from Timestamp to DateTime
+        final date = record['date'];
+        DateTime recordDate = date is Timestamp ? date.toDate() : DateTime.now();
+
+        // Format check-in and check-out times
+        String checkInTime = '--:--';
+        String checkOutTime = '--:--';
+
+        // Handle check-in time
+        if (record['checkInTime'] != null) {
+          try {
+            // If checkInTime is a Timestamp, convert to DateTime
+            DateTime checkInDateTime;
+            if (record['checkInTime'] is Timestamp) {
+              checkInDateTime = (record['checkInTime'] as Timestamp).toDate();
+            } else {
+              // If it's a string, parse it (assuming it's in a format like "HH:mm")
+              checkInDateTime = DateFormat('HH:mm').parse(record['checkInTime']);
+            }
+            checkInTime = DateFormat('h:mm a').format(checkInDateTime);
+          } catch (e) {
+            print('Error parsing checkInTime: $e');
+            checkInTime = '--:--';
+          }
+        }
+
+        // Handle check-out time
+        if (record['checkOutTime'] != null) {
+          try {
+            DateTime checkOutDateTime;
+            if (record['checkOutTime'] is Timestamp) {
+              checkOutDateTime = (record['checkOutTime'] as Timestamp).toDate();
+            } else {
+              checkOutDateTime = DateFormat('HH:mm').parse(record['checkOutTime']);
+            }
+            checkOutTime = DateFormat('h:mm a').format(checkOutDateTime);
+          } catch (e) {
+            print('Error parsing checkOutTime: $e');
+            checkOutTime = '--:--';
+          }
+        }
+
         return Card(
           elevation: 2,
           margin: const EdgeInsets.only(bottom: 8),
@@ -418,18 +455,22 @@ class _AttendanceHistoryViewState extends State<_AttendanceHistoryView> with Tic
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        DateFormat('EEE, MMM d').format((record['date'] as Timestamp).toDate()),
+                        DateFormat('EEE, MMM d').format(recordDate),
                         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                       ),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
-                          color: _getStatusColor(record['status'] ?? 'Unknown').withOpacity(0.1),
+                          color: _getStatusColor(record['status']?.toString() ?? 'Unknown').withOpacity(0.1),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
-                          record['status'] ?? 'Unknown',
-                          style: TextStyle(color: _getStatusColor(record['status'] ?? 'Unknown'), fontSize: 12, fontWeight: FontWeight.bold),
+                          record['status']?.toString() ?? 'Unknown',
+                          style: TextStyle(
+                            color: _getStatusColor(record['status']?.toString() ?? 'Unknown'),
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                     ],
@@ -442,7 +483,7 @@ class _AttendanceHistoryViewState extends State<_AttendanceHistoryView> with Tic
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text('Check In', style: TextStyle(color: Colors.grey[600], fontSize: 12)),
-                          Text(record['checkInTime'] ?? '--:--', style: const TextStyle(fontSize: 16)),
+                          Text(checkInTime, style: const TextStyle(fontSize: 16)),
                           if (record['checkInLocation'] != null)
                             FutureBuilder<String>(
                               future: getPlaceName(
@@ -451,21 +492,12 @@ class _AttendanceHistoryViewState extends State<_AttendanceHistoryView> with Tic
                               ),
                               builder: (context, snapshot) {
                                 if (snapshot.connectionState == ConnectionState.waiting) {
-                                  return Text(
-                                    'Loading location...',
-                                    style: TextStyle(color: Colors.grey[600], fontSize: 12),
-                                  );
+                                  return Text('Loading location...', style: TextStyle(color: Colors.grey[600], fontSize: 12));
                                 }
                                 if (snapshot.hasError) {
-                                  return Text(
-                                    'Error fetching location',
-                                    style: TextStyle(color: Colors.grey[600], fontSize: 12),
-                                  );
+                                  return Text('Error fetching location', style: TextStyle(color: Colors.grey[600], fontSize: 12));
                                 }
-                                return Text(
-                                  'Loc: ${snapshot.data}',
-                                  style: TextStyle(color: Colors.grey[600], fontSize: 12),
-                                );
+                                return Text('Loc: ${snapshot.data}', style: TextStyle(color: Colors.grey[600], fontSize: 12));
                               },
                             ),
                         ],
@@ -474,7 +506,7 @@ class _AttendanceHistoryViewState extends State<_AttendanceHistoryView> with Tic
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text('Check Out', style: TextStyle(color: Colors.grey[600], fontSize: 12)),
-                          Text(record['checkOutTime'] ?? '--:--', style: const TextStyle(fontSize: 16)),
+                          Text(checkOutTime, style: const TextStyle(fontSize: 16)),
                           if (record['checkOutLocation'] != null)
                             FutureBuilder<String>(
                               future: getPlaceName(
@@ -483,21 +515,12 @@ class _AttendanceHistoryViewState extends State<_AttendanceHistoryView> with Tic
                               ),
                               builder: (context, snapshot) {
                                 if (snapshot.connectionState == ConnectionState.waiting) {
-                                  return Text(
-                                    'Loading location...',
-                                    style: TextStyle(color: Colors.grey[600], fontSize: 12),
-                                  );
+                                  return Text('Loading location...', style: TextStyle(color: Colors.grey[600], fontSize: 12));
                                 }
                                 if (snapshot.hasError) {
-                                  return Text(
-                                    'Error fetching location',
-                                    style: TextStyle(color: Colors.grey[600], fontSize: 12),
-                                  );
+                                  return Text('Error fetching location', style: TextStyle(color: Colors.grey[600], fontSize: 12));
                                 }
-                                return Text(
-                                  'Loc: ${snapshot.data}',
-                                  style: TextStyle(color: Colors.grey[600], fontSize: 12),
-                                );
+                                return Text('Loc: ${snapshot.data}', style: TextStyle(color: Colors.grey[600], fontSize: 12));
                               },
                             ),
                         ],
@@ -506,12 +529,12 @@ class _AttendanceHistoryViewState extends State<_AttendanceHistoryView> with Tic
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text('Total', style: TextStyle(color: Colors.grey[600], fontSize: 12)),
-                          Text(record['totalHours'] ?? '0h 0m', style: const TextStyle(fontSize: 16)),
+                          Text(record['totalHours']?.toString() ?? '0h 0m', style: const TextStyle(fontSize: 16)),
                         ],
                       ),
                     ],
                   ),
-                  if ((record['notes'] ?? '').isNotEmpty) ...[
+                  if ((record['notes']?.toString() ?? '').isNotEmpty) ...[
                     const SizedBox(height: 12),
                     Text('Notes: ${record['notes']}', style: TextStyle(color: Colors.grey[700], fontSize: 14)),
                   ],
@@ -523,6 +546,7 @@ class _AttendanceHistoryViewState extends State<_AttendanceHistoryView> with Tic
       },
     );
   }
+
 
   Widget _buildCalendarView(List<Map<String, dynamic>> attendance, AttendanceHistoryNotifier notifier) {
     return TableCalendar(
@@ -542,7 +566,7 @@ class _AttendanceHistoryViewState extends State<_AttendanceHistoryView> with Tic
       calendarBuilders: CalendarBuilders(
         markerBuilder: (context, date, events) {
           bool hasAttendance = attendance.any((record) {
-            DateTime recordDate = (record['date'] as Timestamp).toDate();
+            final recordDate = record['date'] is Timestamp ? (record['date'] as Timestamp).toDate() : DateTime.now();
             return isSameDay(recordDate, date);
           });
           if (hasAttendance) {
@@ -563,6 +587,8 @@ class _AttendanceHistoryViewState extends State<_AttendanceHistoryView> with Tic
   }
 
   Widget _buildSelectedDayDetail(Map<String, dynamic> record) {
+    final date = record['date'];
+    DateTime recordDate = date is Timestamp ? date.toDate() : DateTime.now();
     return Container(
       padding: const EdgeInsets.all(16),
       margin: const EdgeInsets.all(16),
@@ -578,7 +604,7 @@ class _AttendanceHistoryViewState extends State<_AttendanceHistoryView> with Tic
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                DateFormat('EEEE, MMMM d').format((record['date'] as Timestamp).toDate()),
+                DateFormat('EEEE, MMMM d').format(recordDate),
                 style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
               Container(
@@ -589,7 +615,10 @@ class _AttendanceHistoryViewState extends State<_AttendanceHistoryView> with Tic
                 ),
                 child: Text(
                   record['status'] ?? 'Unknown',
-                  style: TextStyle(color: _getStatusColor(record['status'] ?? 'Unknown'), fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                    color: _getStatusColor(record['status'] ?? 'Unknown'),
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ],
