@@ -102,6 +102,7 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
 
   Future<void> _fetchSummaryData() async {
     try {
+      // Fetch employees count
       QuerySnapshot friendsSnapshot = await _firestore
           .collection('teachers')
           .doc(_userId)
@@ -110,8 +111,14 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
       int totalFriends = friendsSnapshot.docs.length;
       print('Total friends fetched: $totalFriends');
 
+      // Fetch active projects count
+      QuerySnapshot projectsSnapshot = await _firestore.collection('projects').get();
+      int activeProjects = projectsSnapshot.docs.length;
+      print('Active projects: $activeProjects');
+
       setState(() {
         _stats['employees'] = totalFriends;
+        _stats['projects'] = activeProjects;
       });
     } catch (e) {
       _showSnackBar('Error fetching summary data: $e');

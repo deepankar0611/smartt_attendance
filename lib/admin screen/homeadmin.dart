@@ -88,86 +88,159 @@ class _DashboardHomeState extends State<DashboardHome> with SingleTickerProvider
   }
 
   Future<void> _fetchSummaryData() async {
-    QuerySnapshot friendsSnapshot = await _firestore
-        .collection('teachers')
-        .doc(_userId)
-        .collection('friends')
-        .get();
-    int totalFriends = friendsSnapshot.docs.length;
+    try {
+      setState(() => _isLoading = true);
 
-    double totalFriendsChange = 0.0;
-    DateTime now = DateTime.now();
-    DateTime firstDayOfCurrentMonth = DateTime(now.year, now.month, 1);
-    DateTime lastDayOfPreviousMonth = firstDayOfCurrentMonth.subtract(Duration(days: 1));
-    QuerySnapshot previousFriendsSnapshot = await _firestore
-        .collection('teachers')
-        .doc(_userId)
-        .collection('friendHistory')
-        .where('date', isLessThanOrEqualTo: Timestamp.fromDate(lastDayOfPreviousMonth))
-        .orderBy('date', descending: true)
-        .limit(1)
-        .get();
+      // Fetch friends
+      QuerySnapshot friendsSnapshot = await _firestore
+          .collection('teachers')
+          .doc(_userId)
+          .collection('friends')
+          .get();
+      int totalFriends = friendsSnapshot.docs.length;
+      print('Total friends: $totalFriends');
 
-    if (previousFriendsSnapshot.docs.isNotEmpty) {
-      int previousFriendsCount = previousFriendsSnapshot.docs.first.get('count') ?? 0;
-      if (previousFriendsCount > 0) {
-        totalFriendsChange = ((totalFriends - previousFriendsCount) / previousFriendsCount) * 100;
+      // Calculate total friends change
+      double totalFriendsChange = 0.0;
+      DateTime now = DateTime.now();
+      DateTime firstDayOfCurrentMonth = DateTime(now.year, now.month, 1);
+      DateTime lastDayOfPreviousMonth = firstDayOfCurrentMonth.subtract(Duration(days: 1));
+      QuerySnapshot previousFriendsSnapshot = await _firestore
+          .collection('teachers')
+          .doc(_userId)
+          .collection('friendHistory')
+          .where('date', isLessThanOrEqualTo: Timestamp.fromDate(lastDayOfPreviousMonth))
+          .orderBy('date', descending: true)
+          .limit(1)
+          .get();
+
+      if (previousFriendsSnapshot.docs.isNotEmpty) {
+        int previousFriendsCount = previousFriendsSnapshot.docs.first.get('count') ?? 0;
+        print('Previous friends count: $previousFriendsCount');
+        if (previousFriendsCount > 0) {
+          totalFriendsChange = ((totalFriends - previousFriendsCount) / previousFriendsCount) * 100;
+        }
       }
-    }
 
-    List<String> friendUids = friendsSnapshot.docs
-        .map((doc) => doc.get('friendId') as String)
-        .toList();
+      List<String> friendUids = friendsSnapshot.docs
+          .map((doc) => doc.get('friendId') as String)
+          .toList();
+      print('Friend UIDs: $friendUids');
 
-    int presentToday = 0;
-    int onLeave = 0;
-    DateTime today = DateTime(now.year, now.month, now.day);
+      int presentToday = 0;
+      int onLeave = 0;
+      DateTime today = DateTime(2025, 4, 2); // Set to April 2, 2025
 
-    for (String friendUid in friendUids) {
-      DocumentSnapshot studentDoc = await _firestore.collection('students').doc(friendUid).get();
-      if (studentDoc.exists) {
-        var data = studentDoc.data() as Map<String, dynamic>;
-        if (data.containsKey('checkInTime') && data['checkInTime'] != null) {
-          Timestamp checkInTimestamp = data['checkInTime'] as Timestamp;
-          DateTime checkInDate = checkInTimestamp.toDate();
-          if (DateTime(checkInDate.year, checkInDate.month, checkInDate.day) == today) {
-            presentToday++;
+      for (String friendUid in friendUids) {
+        // Fetch student document
+        DocumentSnapshot studentDoc = await _firestore.collection('students').doc(friendUid).get();
+        if (studentDoc.exists) {
+          var data = studentDoc.data() as Map<String, dynamic>;
+          print('Student data for $friendUid: $data');
+
+          // Check for present today
+          if (data.containsKey('checkInTime') && data['checkInTime'] != null) {
+            try {
+              Timestamp checkInTimestamp = data['checkInTime'] as Timestamp;
+              DateTime checkInDate = checkInTimestamp.toDate();
+              if (DateTime(checkInDate.year, checkInDate.month, checkInDate.day) == today) {
+                presentToday++;
+              }
+            } catch (e) {
+              print('Error parsing checkInTime for $friendUid: $e');
+            }
+          } else {
+            print('No checkInTime found for $friendUid');
           }
-        }
-        if (data['leaveStatus'] == 'On Leave') {
-          onLeave++;
+
+          // Fetch leave data
+          QuerySnapshot leaveSnapshot = await _firestore
+              .collection('students')
+              .doc(friendUid)
+              .collection('leaves')
+              .get();
+          print('Leave records for $friendUid: ${leaveSnapshot.docs.length}');
+
+          for (var leaveDoc in leaveSnapshot.docs) {
+            var leaveData = leaveDoc.data() as Map<String, dynamic>;
+            print('Leave data: $leaveData');
+
+            if (leaveData.containsKey('startDate') && leaveData.containsKey('endDate')) {
+              try {
+                Timestamp startTimestamp = leaveData['startDate'] as Timestamp;
+                Timestamp endTimestamp = leaveData['endDate'] as Timestamp;
+                
+                DateTime startDate = startTimestamp.toDate();
+                DateTime endDate = endTimestamp.toDate();
+
+                // Check if today is between startDate and endDate (inclusive)
+                if (today.isAfter(startDate.subtract(Duration(days: 1))) &&
+                    today.isBefore(endDate.add(Duration(days: 1)))) {
+                  onLeave++;
+                  print('Leave counted for $friendUid on $today');
+                }
+              } catch (e) {
+                print('Error parsing leave dates for $friendUid: $e');
+              }
+            } else {
+              print('Missing startDate or endDate for leave record in $friendUid');
+            }
+          }
+        } else {
+          print('Student document for $friendUid does not exist');
         }
       }
-    }
 
-    double presentTodayChange = 0.0;
-    DateTime yesterday = now.subtract(Duration(days: 1));
-    QuerySnapshot yesterdayAttendanceSnapshot = await _firestore
-        .collection('attendanceRecords')
-        .where('date', isEqualTo: Timestamp.fromDate(DateTime(yesterday.year, yesterday.month, yesterday.day)))
-        .limit(1)
-        .get();
+      // Calculate present today change
+      double presentTodayChange = 0.0;
+      DateTime yesterday = today.subtract(Duration(days: 1));
+      QuerySnapshot yesterdayAttendanceSnapshot = await _firestore
+          .collection('attendanceRecords')
+          .where('date', isEqualTo: Timestamp.fromDate(DateTime(yesterday.year, yesterday.month, yesterday.day)))
+          .limit(1)
+          .get();
 
-    if (yesterdayAttendanceSnapshot.docs.isNotEmpty) {
-      int yesterdayPresent = yesterdayAttendanceSnapshot.docs.first.get('present') ?? 0;
-      if (yesterdayPresent > 0) {
-        presentTodayChange = ((presentToday - yesterdayPresent) / yesterdayPresent) * 100;
+      if (yesterdayAttendanceSnapshot.docs.isNotEmpty) {
+        int yesterdayPresent = yesterdayAttendanceSnapshot.docs.first.get('present') ?? 0;
+        print('Yesterday present: $yesterdayPresent');
+        if (yesterdayPresent > 0) {
+          presentTodayChange = ((presentToday - yesterdayPresent) / yesterdayPresent) * 100;
+        }
       }
+
+      // Fetch active projects
+      QuerySnapshot projectsSnapshot = await _firestore.collection('projects').get();
+      int activeProjects = projectsSnapshot.docs.length;
+      print('Active projects: $activeProjects');
+
+      // Update state with fetched data
+      setState(() {
+        _summaryData = {
+          'totalEmployees': totalFriends,
+          'totalEmployeesChange': totalFriendsChange,
+          'presentToday': presentToday,
+          'presentTodayChange': presentTodayChange,
+          'onLeave': onLeave,
+          'activeProjects': activeProjects,
+        };
+        _isLoading = false;
+        print('Summary data updated: $_summaryData');
+      });
+    } catch (e) {
+      print('Error fetching summary data: $e');
+      setState(() => _isLoading = false);
     }
+  }
 
-    QuerySnapshot projectsSnapshot = await _firestore.collection('projects').get();
-    int activeProjects = projectsSnapshot.docs.length;
-
-    setState(() {
-      _summaryData = {
-        'totalEmployees': totalFriends,
-        'totalEmployeesChange': totalFriendsChange,
-        'presentToday': presentToday,
-        'presentTodayChange': presentTodayChange,
-        'onLeave': onLeave,
-        'activeProjects': activeProjects,
-      };
-    });
+  // Helper method to parse date strings like "April 2, 2025 at 12:00:00 AM UTC+5:30"
+  DateTime _parseDateTime(String dateStr) {
+    try {
+      String cleanedDateStr = dateStr.replaceAll(" UTC+5:30", "");
+      return DateFormat("MMMM d, yyyy 'at' h:mm:ss a").parse(cleanedDateStr);
+    } catch (e) {
+      print('Error parsing date: $dateStr, Error: $e');
+      rethrow; // Rethrow to catch in the calling function
+    }
   }
 
   Future<void> _fetchProjects() async {
@@ -188,11 +261,16 @@ class _DashboardHomeState extends State<DashboardHome> with SingleTickerProvider
 
   Color _getTeamColor(String team) {
     switch (team.toLowerCase()) {
-      case 'development': return Colors.purple;
-      case 'design': return Colors.blue;
-      case 'ui/ux': return Colors.green;
-      case 'qa team': return Colors.orange;
-      default: return Colors.grey;
+      case 'development':
+        return Colors.purple;
+      case 'design':
+        return Colors.blue;
+      case 'ui/ux':
+        return Colors.green;
+      case 'qa team':
+        return Colors.orange;
+      default:
+        return Colors.grey;
     }
   }
 
@@ -252,6 +330,8 @@ class _DashboardHomeState extends State<DashboardHome> with SingleTickerProvider
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
+          : _summaryData.isEmpty
+          ? const Center(child: Text('No data available', style: TextStyle(fontSize: 18, color: Colors.grey)))
           : SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.all(12.0),
@@ -304,7 +384,7 @@ class _DashboardHomeState extends State<DashboardHome> with SingleTickerProvider
             child: Column(
               children: [
                 FloatingActionButton.extended(
-                  heroTag: 'fab_department', // Unique tag
+                  heroTag: 'fab_department',
                   onPressed: () {
                     Navigator.push(context, MaterialPageRoute(builder: (context) => const EmployeeListScreen()));
                     _toggleMenu();
@@ -317,7 +397,7 @@ class _DashboardHomeState extends State<DashboardHome> with SingleTickerProvider
                 ),
                 const SizedBox(height: 10),
                 FloatingActionButton.extended(
-                  heroTag: 'fab_group', // Unique tag
+                  heroTag: 'fab_group',
                   onPressed: () {
                     Navigator.push(context, MaterialPageRoute(builder: (context) => const ProjectListScreen()));
                     _toggleMenu();
@@ -330,7 +410,7 @@ class _DashboardHomeState extends State<DashboardHome> with SingleTickerProvider
                 ),
                 const SizedBox(height: 10),
                 FloatingActionButton.extended(
-                  heroTag: 'fab_analyzer', // Unique tag
+                  heroTag: 'fab_analyzer',
                   onPressed: () {
                     Navigator.push(context, MaterialPageRoute(builder: (context) => const AnalyzerScreen()));
                     _toggleMenu();
@@ -346,7 +426,7 @@ class _DashboardHomeState extends State<DashboardHome> with SingleTickerProvider
             ),
           ),
           FloatingActionButton(
-            heroTag: 'fab_menu', // Unique tag
+            heroTag: 'fab_menu',
             onPressed: _toggleMenu,
             backgroundColor: const Color(0xff006600),
             child: AnimatedIcon(
@@ -361,7 +441,6 @@ class _DashboardHomeState extends State<DashboardHome> with SingleTickerProvider
   }
 }
 
-// SummaryCards and ProjectStatusList remain unchanged for brevity
 class SummaryCards extends StatelessWidget {
   final Map<String, dynamic> summaryData;
 

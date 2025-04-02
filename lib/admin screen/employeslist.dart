@@ -72,6 +72,10 @@ class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> wit
     try {
       setState(() => _isLoading = true);
 
+      // Get today's date at midnight for comparison
+      DateTime today = DateTime.now();
+      DateTime todayMidnight = DateTime(today.year, today.month, today.day);
+
       // Step 1: Fetch the current teacher's friends subcollection
       QuerySnapshot friendsSnapshot = await _firestore
           .collection('teachers')
@@ -110,57 +114,77 @@ class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> wit
               'total': 0,
               'onTime': 0,
               'late': 0,
-              'leave': 0, // We'll assume 'leave' if the student is not checked in
+              'leave': 0,
             };
           }
 
           // Increment total count for this job
           jobStats[job]!['total'] = (jobStats[job]!['total'] as int) + 1;
 
-          bool isCheckedIn = data['isCheckedIn'] ?? false;
-          if (isCheckedIn) {
-            // Extract check-in location and decode it
-            String location = 'Not specified';
-            if (data['checkInLocation'] != null) {
-              double latitude = data['checkInLocation']['latitude']?.toDouble() ?? 0.0;
-              double longitude = data['checkInLocation']['longitude']?.toDouble() ?? 0.0;
-              if (latitude != 0.0 && longitude != 0.0) {
-                location = await _getAddressFromCoordinates(latitude, longitude);
+          // Check if student has checked in today
+          if (data['checkInTime'] != null) {
+            Timestamp checkInTimestamp = data['checkInTime'] as Timestamp;
+            DateTime checkInDateTime = checkInTimestamp.toDate();
+            DateTime checkInMidnight = DateTime(checkInDateTime.year, checkInDateTime.month, checkInDateTime.day);
+
+            // Only process if check-in is from today
+            if (checkInMidnight.isAtSameMomentAs(todayMidnight)) {
+              // Extract check-in location
+              String checkInLocation = 'Not specified';
+              if (data['checkInLocation'] != null) {
+                double latitude = data['checkInLocation']['latitude']?.toDouble() ?? 0.0;
+                double longitude = data['checkInLocation']['longitude']?.toDouble() ?? 0.0;
+                if (latitude != 0.0 && longitude != 0.0) {
+                  checkInLocation = await _getAddressFromCoordinates(latitude, longitude);
+                }
+              }
+
+              // Extract check-out time and location
+              String checkOutTime = 'Not checked out';
+              String checkOutLocation = 'Not specified';
+              if (data['checkOutTime'] != null) {
+                Timestamp checkOutTimestamp = data['checkOutTime'] as Timestamp;
+                DateTime checkOutDateTime = checkOutTimestamp.toDate();
+                checkOutTime = DateFormat('HH:mm').format(checkOutDateTime);
+              }
+              if (data['checkOutLocation'] != null) {
+                double latitude = data['checkOutLocation']['latitude']?.toDouble() ?? 0.0;
+                double longitude = data['checkOutLocation']['longitude']?.toDouble() ?? 0.0;
+                if (latitude != 0.0 && longitude != 0.0) {
+                  checkOutLocation = await _getAddressFromCoordinates(latitude, longitude);
+                }
+              }
+
+              // Format the check-in time
+              String loginTime = DateFormat('HH:mm').format(checkInDateTime);
+
+              // Prepare employee data
+              Map<String, dynamic> employee = {
+                'name': data['name'] ?? 'Unknown',
+                'position': job,
+                'status': 'Regular',
+                'loginTime': loginTime,
+                'checkOutTime': checkOutTime,
+                'attendance': data['status'] ?? 'Unknown',
+                'avatar': _getAvatarColor(data['name']),
+                'checkInLocation': checkInLocation,
+                'checkOutLocation': checkOutLocation,
+              };
+
+              // Add to Logged In list
+              loggedInList.add(employee);
+
+              // Update job stats based on attendance
+              if (employee['attendance'] == 'On Time') {
+                jobStats[job]!['onTime'] = (jobStats[job]!['onTime'] as int) + 1;
+                onTimeList.add(employee);
+              } else if (employee['attendance'] == 'Late') {
+                jobStats[job]!['late'] = (jobStats[job]!['late'] as int) + 1;
+                lateList.add(employee);
               }
             }
-
-            // Format the check-in time to show only the time (e.g., "14:42")
-            String loginTime = '--:--';
-            if (data['checkInTime'] != null) {
-              Timestamp checkInTimestamp = data['checkInTime'] as Timestamp;
-              DateTime checkInDateTime = checkInTimestamp.toDate();
-              loginTime = DateFormat('HH:mm').format(checkInDateTime); // Format to show only time
-            }
-
-            // Prepare employee data
-            Map<String, dynamic> employee = {
-              'name': data['name'] ?? 'Unknown',
-              'position': job,
-              'status': 'Regular',
-              'loginTime': loginTime, // Use the formatted time
-              'attendance': data['status'] ?? 'Unknown',
-              'avatar': _getAvatarColor(data['name']),
-              'location': location,
-            };
-
-            // Add to Logged In list
-            loggedInList.add(employee);
-
-            // Update job stats based on attendance
-            if (employee['attendance'] == 'On Time') {
-              jobStats[job]!['onTime'] = (jobStats[job]!['onTime'] as int) + 1;
-              onTimeList.add(employee);
-            } else if (employee['attendance'] == 'Late') {
-              jobStats[job]!['late'] = (jobStats[job]!['late'] as int) + 1;
-              lateList.add(employee);
-            }
           } else {
-            // If not checked in, assume they are on leave
+            // If no check-in time, assume they are on leave
             jobStats[job]!['leave'] = (jobStats[job]!['leave'] as int) + 1;
           }
         }
@@ -823,20 +847,49 @@ class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> wit
                             const SizedBox(width: 6),
                             Expanded(
                               child: Text(
-                                'Location: ${employee['location']}',
+                                'Check-in: ${employee['checkInLocation']}',
                                 style: TextStyle(color: Colors.grey[700], fontSize: 12),
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
                           ],
                         ),
+                        if (employee['checkOutLocation'] != 'Not specified') ...[
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Icon(Icons.location_off, size: 12, color: Colors.grey[600]),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  'Check-out: ${employee['checkOutLocation']}',
+                                  style: TextStyle(color: Colors.grey[700], fontSize: 12),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                         const SizedBox(height: 12),
                         Divider(color: Colors.grey[200], thickness: 1, height: 5),
                         Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Icon(Icons.login, size: 14, color: Colors.grey[600]),
-                            const SizedBox(width: 6),
-                            Text('Login: ${employee['loginTime']}', style: TextStyle(color: Colors.grey[700], fontSize: 11)),
+                            Row(
+                              children: [
+                                Icon(Icons.login, size: 14, color: Colors.grey[600]),
+                                const SizedBox(width: 6),
+                                Text('In: ${employee['loginTime']}', style: TextStyle(color: Colors.grey[700], fontSize: 11)),
+                              ],
+                            ),
+                            if (employee['checkOutTime'] != 'Not checked out')
+                              Row(
+                                children: [
+                                  Icon(Icons.logout, size: 14, color: Colors.grey[600]),
+                                  const SizedBox(width: 6),
+                                  Text('Out: ${employee['checkOutTime']}', style: TextStyle(color: Colors.grey[700], fontSize: 11)),
+                                ],
+                              ),
                           ],
                         ),
                       ],

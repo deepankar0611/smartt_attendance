@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
+import 'leave.dart';
 
 class LeaveHistoryPage extends StatefulWidget {
   const LeaveHistoryPage({Key? key}) : super(key: key);
@@ -160,6 +161,19 @@ class _LeaveHistoryPageState extends State<LeaveHistoryPage> {
             },
           );
         },
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const LeaveApplicationPage()),
+          ).then((_) {
+            // Refresh the leave history when returning from the application page
+            setState(() {});
+          });
+        },
+        backgroundColor: const Color(0xFF1B5E20),
+        child: const Icon(Icons.add, color: Colors.white),
       ),
     );
   }

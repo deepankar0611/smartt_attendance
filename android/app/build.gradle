@@ -11,7 +11,7 @@ plugins {
 
 
 dependencies {
-    implementation platform('com.google.firebase:firebase-bom:33.10.0')
+    implementation platform('com.google.firebase:firebase-bom:33.12.0')
     // Remove this line: implementation 'com.google.firebase:firebase-core-ktx'
     implementation 'com.google.firebase:firebase-auth-ktx'
 }

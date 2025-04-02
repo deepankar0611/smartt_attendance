@@ -6,12 +6,14 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:smartt_attendance/student%20screen/settingsheet.dart';
 import 'dart:io';
 import 'leave.dart';
+import 'leave_history_page.dart';
 import 'login_screen.dart';
 import 'edit_profile_sheet.dart';
-import 'package:image_picker/image_picker.dart'; // For picking images
+import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shimmer/shimmer.dart';
 
-import 'notification.dart'; // For Supabase integration
+import 'notification.dart';
 
 class ModernProfilePage extends StatefulWidget {
   const ModernProfilePage({super.key});
@@ -22,16 +24,17 @@ class ModernProfilePage extends StatefulWidget {
 
 class _ModernProfilePageState extends State<ModernProfilePage> {
   File? _profileImage;
-  String? _profileImageUrl; // To store the image URL from Firestore
-  String _name = "Aryan Bansal";
-  String _job = "Flutter Developer";
-  String _location = "Chandigarh";
-  String _mobile = "7479519946";
+  String? _profileImageUrl;
+  String _name = "";
+  String _job = "";
+  String _location = "";
+  String _mobile = "";
   final Map<String, int> _stats = {
-    'Projects': 12,
-    'Attended': 25,
-    'Leaves': 2,
+    'Projects': 0,
+    'Attended': 0,
+    'Leaves': 0,
   };
+  bool _isLoading = true;
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -53,9 +56,76 @@ class _ModernProfilePageState extends State<ModernProfilePage> {
         MaterialPageRoute(builder: (context) => const LoginScreen()),
       );
     } else {
-      _fetchUserProfile();
-      _fetchAttendanceStats();
+      _initializeData();
     }
+  }
+
+  Future<void> _initializeData() async {
+    try {
+      await Future.wait([
+        _fetchUserProfile(),
+        _fetchAttendanceStats(),
+        _fetchProjectCount(),
+        _fetchLeaveCount(),
+      ]);
+      setState(() {
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error initializing data: $e');
+      }
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  Widget _buildShimmerLoading() {
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      child: Shimmer.fromColors(
+        baseColor: Colors.grey[300]!,
+        highlightColor: Colors.grey[100]!,
+        child: Column(
+          children: [
+            Container(
+              width: double.infinity,
+              height: 250,
+              color: Colors.white,
+            ),
+            const SizedBox(height: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Container(
+                height: 70,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Column(
+                children: List.generate(4, (index) => Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Container(
+                    height: 50,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                )),
+              ),
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _fetchUserProfile() async {
@@ -64,11 +134,11 @@ class _ModernProfilePageState extends State<ModernProfilePage> {
       if (userDoc.exists) {
         final data = userDoc.data() as Map<String, dynamic>;
         setState(() {
-          _name = data['name'] ?? "Aryan Bansal";
-          _job = data['job'] ?? "Flutter Developer";
+          _name = data['name'] ?? "User";
+          _job = data['job'] ?? "Loading";
           _location = data['location'] ?? "Chandigarh";
           _mobile = data['mobile'] ?? "7479519946";
-          _stats['Projects'] = data['projects'] ?? 12;
+          _stats['Projects'] = data['projects'] ?? 0;
           _profileImageUrl = data['profileImageUrl'];
         });
       } else {
@@ -124,9 +194,70 @@ class _ModernProfilePageState extends State<ModernProfilePage> {
     }
   }
 
+  Future<void> _fetchProjectCount() async {
+    try {
+      QuerySnapshot creatorProjects = await _firestore
+          .collection('projects')
+          .where('creatorUid', isEqualTo: _userId)
+          .get();
+
+      QuerySnapshot employeeProjects = await _firestore
+          .collection('projects')
+          .where('employeeUids', arrayContains: _userId)
+          .get();
+
+      Set<String> projectIds = {};
+      
+      for (var doc in creatorProjects.docs) {
+        projectIds.add(doc.id);
+      }
+      
+      for (var doc in employeeProjects.docs) {
+        projectIds.add(doc.id);
+      }
+
+      setState(() {
+        _stats['Projects'] = projectIds.length;
+      });
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error fetching project count: $e');
+      }
+      setState(() {
+        _stats['Projects'] = 0;
+      });
+    }
+  }
+
+  Future<void> _fetchLeaveCount() async {
+    try {
+      final leavesRef = _firestore
+          .collection('students')
+          .doc(_userId)
+          .collection('leaves');
+
+      QuerySnapshot leavesSnapshot = await leavesRef.get();
+
+      int approvedLeaves = leavesSnapshot.docs
+          .where((doc) => doc.data() is Map<String, dynamic> && 
+              (doc.data() as Map<String, dynamic>)['status'] == 'Approved')
+          .length;
+
+      setState(() {
+        _stats['Leaves'] = approvedLeaves;
+      });
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error fetching leave count: $e');
+      }
+      setState(() {
+        _stats['Leaves'] = 0;
+      });
+    }
+  }
+
   Future<void> _pickAndUploadImage() async {
     try {
-      // Show a dialog to choose between gallery and camera
       final ImageSource? source = await showDialog<ImageSource>(
         context: context,
         builder: (context) => AlertDialog(
@@ -144,25 +275,22 @@ class _ModernProfilePageState extends State<ModernProfilePage> {
         ),
       );
 
-      if (source == null) return; // User canceled the dialog
+      if (source == null) return;
 
-      // Pick an image using the non-deprecated API
       final XFile? pickedFile = await _picker.pickImage(
         source: source,
-        imageQuality: 80, // Reduce image quality to decrease file size
+        imageQuality: 80,
       );
 
-      if (pickedFile == null) return; // User canceled the picker
+      if (pickedFile == null) return;
 
       setState(() {
         _isUploading = true;
       });
 
-      // Create a unique file name using the user ID and timestamp
       String fileName = '$_userId-${DateTime.now().millisecondsSinceEpoch}.jpg';
       File imageFile = File(pickedFile.path);
 
-      // Delete the old image from Supabase if it exists
       if (_profileImageUrl != null && _profileImageUrl!.isNotEmpty) {
         String oldFileName = _profileImageUrl!.split('/').last;
         try {
@@ -174,23 +302,19 @@ class _ModernProfilePageState extends State<ModernProfilePage> {
         }
       }
 
-      // Upload the image to Supabase
       final String path = await _supabase.storage
           .from('profile_pictures')
           .upload(fileName, imageFile, fileOptions: const FileOptions(upsert: true));
 
-      // Get the public URL of the uploaded image
       final String imageUrl = _supabase.storage.from('profile_pictures').getPublicUrl(fileName);
 
-      // Update Firestore with the image URL
       await _firestore.collection('students').doc(_userId).update({
         'profileImageUrl': imageUrl,
       });
 
-      // Update the UI
       setState(() {
         _profileImageUrl = imageUrl;
-        _profileImage = imageFile; // For local preview before URL fetch
+        _profileImage = imageFile;
       });
 
       _showSnackBar('Profile picture updated successfully');
@@ -288,7 +412,7 @@ class _ModernProfilePageState extends State<ModernProfilePage> {
   void _navigateToleavePage() async {
     final result = await Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const LeaveApplicationPage()),
+      MaterialPageRoute(builder: (context) => const LeaveHistoryPage()),
     );
 
     if (result == 'update') {
@@ -342,25 +466,27 @@ class _ModernProfilePageState extends State<ModernProfilePage> {
         elevation: 0,
         toolbarHeight: 5,
       ),
-      body: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
-        child: Column(
-          children: [
-            _buildProfileHeader(gradientStart, gradientEnd),
-            const SizedBox(height: 24),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: _buildUserStatsRow(),
+      body: _isLoading
+          ? _buildShimmerLoading()
+          : SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              child: Column(
+                children: [
+                  _buildProfileHeader(gradientStart, gradientEnd),
+                  const SizedBox(height: 16),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: _buildUserStatsRow(),
+                  ),
+                  const SizedBox(height: 16),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: _buildOptionsCard(baseColor),
+                  ),
+                  const SizedBox(height: 20),
+                ],
+              ),
             ),
-            const SizedBox(height: 24),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: _buildOptionsCard(baseColor),
-            ),
-            const SizedBox(height: 40),
-          ],
-        ),
-      ),
       floatingActionButton: FloatingActionButton(
         onPressed: _logout,
         backgroundColor: baseColor,
@@ -457,7 +583,7 @@ class _ModernProfilePageState extends State<ModernProfilePage> {
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(
-              _name,
+              _name.isNotEmpty ? _name : "Loading...",
               style: const TextStyle(
                 fontSize: 28,
                 fontWeight: FontWeight.w700,
@@ -467,7 +593,7 @@ class _ModernProfilePageState extends State<ModernProfilePage> {
           ),
           const SizedBox(height: 8),
           Text(
-            _job,
+            _job.isNotEmpty ? _job : "Loading...",
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w500,
@@ -488,7 +614,7 @@ class _ModernProfilePageState extends State<ModernProfilePage> {
                 const Icon(Icons.location_on, color: Colors.white70, size: 18),
                 const SizedBox(width: 6),
                 Text(
-                  _location,
+                  _location.isNotEmpty ? _location : "Loading...",
                   style: const TextStyle(
                     fontSize: 14,
                     color: Colors.white70,

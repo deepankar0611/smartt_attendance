@@ -402,12 +402,10 @@ class _AttendanceHistoryViewState extends State<_AttendanceHistoryView> with Tic
         // Handle check-in time
         if (record['checkInTime'] != null) {
           try {
-            // If checkInTime is a Timestamp, convert to DateTime
             DateTime checkInDateTime;
             if (record['checkInTime'] is Timestamp) {
               checkInDateTime = (record['checkInTime'] as Timestamp).toDate();
             } else {
-              // If it's a string, parse it (assuming it's in a format like "HH:mm")
               checkInDateTime = DateFormat('HH:mm').parse(record['checkInTime']);
             }
             checkInTime = DateFormat('h:mm a').format(checkInDateTime);
@@ -589,6 +587,43 @@ class _AttendanceHistoryViewState extends State<_AttendanceHistoryView> with Tic
   Widget _buildSelectedDayDetail(Map<String, dynamic> record) {
     final date = record['date'];
     DateTime recordDate = date is Timestamp ? date.toDate() : DateTime.now();
+    
+    // Format check-in and check-out times
+    String checkInTime = '--:--';
+    String checkOutTime = '--:--';
+
+    // Handle check-in time
+    if (record['checkInTime'] != null) {
+      try {
+        DateTime checkInDateTime;
+        if (record['checkInTime'] is Timestamp) {
+          checkInDateTime = (record['checkInTime'] as Timestamp).toDate();
+        } else {
+          checkInDateTime = DateFormat('HH:mm').parse(record['checkInTime']);
+        }
+        checkInTime = DateFormat('h:mm a').format(checkInDateTime);
+      } catch (e) {
+        print('Error parsing checkInTime: $e');
+        checkInTime = '--:--';
+      }
+    }
+
+    // Handle check-out time
+    if (record['checkOutTime'] != null) {
+      try {
+        DateTime checkOutDateTime;
+        if (record['checkOutTime'] is Timestamp) {
+          checkOutDateTime = (record['checkOutTime'] as Timestamp).toDate();
+        } else {
+          checkOutDateTime = DateFormat('HH:mm').parse(record['checkOutTime']);
+        }
+        checkOutTime = DateFormat('h:mm a').format(checkOutDateTime);
+      } catch (e) {
+        print('Error parsing checkOutTime: $e');
+        checkOutTime = '--:--';
+      }
+    }
+
     return Container(
       padding: const EdgeInsets.all(16),
       margin: const EdgeInsets.all(16),
@@ -628,7 +663,7 @@ class _AttendanceHistoryViewState extends State<_AttendanceHistoryView> with Tic
             spacing: 16,
             runSpacing: 16,
             children: [
-              _buildDetailItem('Check In', record['checkInTime'] ?? '--:--'),
+              _buildDetailItem('Check In', checkInTime),
               if (record['checkInLocation'] != null)
                 FutureBuilder<String>(
                   future: getPlaceName(
@@ -645,7 +680,7 @@ class _AttendanceHistoryViewState extends State<_AttendanceHistoryView> with Tic
                     return _buildDetailItem('Check In Loc', snapshot.data ?? 'Unknown');
                   },
                 ),
-              _buildDetailItem('Check Out', record['checkOutTime'] ?? '--:--'),
+              _buildDetailItem('Check Out', checkOutTime),
               if (record['checkOutLocation'] != null)
                 FutureBuilder<String>(
                   future: getPlaceName(
