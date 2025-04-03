@@ -2,16 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:shimmer/shimmer.dart';
+import 'package:provider/provider.dart';
+import '../providers/attendance_screen_provider.dart';
 
 class LocationBottomSheet extends StatefulWidget {
-  final Function(DateTime) onPunchIn;
-  final Function(DateTime)? onPunchOut;
   final bool isCheckIn;
 
   const LocationBottomSheet({
     super.key,
-    required this.onPunchIn,
-    this.onPunchOut,
     required this.isCheckIn,
   });
 
@@ -83,18 +81,51 @@ class _LocationBottomSheetState extends State<LocationBottomSheet> {
     });
   }
 
-  void _onHorizontalDragEnd(double maxWidth) {
+  void _onHorizontalDragEnd(BuildContext context, double maxWidth) async {
     if (_isActionCompleted || _currentPosition == null) return;
 
     if (_dragPosition >= maxWidth / 2) {
-      DateTime actionTime = DateTime.now();
-      if (widget.isCheckIn) {
-        widget.onPunchIn(actionTime);
-      } else if (widget.onPunchOut != null) {
-        widget.onPunchOut!(actionTime);
-      }
-      Navigator.pop(context);
       setState(() => _isActionCompleted = true);
+      
+      try {
+        final provider = Provider.of<AttendanceScreenProvider>(context, listen: false);
+        DateTime actionTime = DateTime.now();
+
+        if (widget.isCheckIn) {
+          print("Executing check-in via provider");
+          await provider.handleCheckIn(actionTime);
+        } else {
+          print("Executing check-out via provider");
+          await provider.handleCheckOut(actionTime);
+        }
+
+        // Show success message
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(widget.isCheckIn ? 'Successfully checked in!' : 'Successfully checked out!'),
+              backgroundColor: widget.isCheckIn ? Colors.green : Colors.red,
+            ),
+          );
+        }
+
+        // Delay pop to show completion state
+        await Future.delayed(const Duration(milliseconds: 500));
+        if (mounted) {
+          Navigator.pop(context);
+        }
+      } catch (e) {
+        print("Error during ${widget.isCheckIn ? 'check-in' : 'check-out'}: $e");
+        setState(() => _isActionCompleted = false);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to ${widget.isCheckIn ? 'check in' : 'check out'}: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
     } else {
       setState(() => _dragPosition = 0);
     }
@@ -104,44 +135,49 @@ class _LocationBottomSheetState extends State<LocationBottomSheet> {
   Widget build(BuildContext context) {
     double maxWidth = MediaQuery.of(context).size.width - 32 - 65;
 
-    return Container(
-      color: Colors.grey[200],
-      padding: const EdgeInsets.all(16.0),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              CircleAvatar(
-                radius: 20,
-                backgroundColor: Colors.grey,
-                child: Icon(Icons.business, size: 20, color: Colors.white),
-              ),
-              SizedBox(width: 10),
-              Flexible(
-                child: Text(
-                  'Space Infotech Pvt. Ltd.',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+    return WillPopScope(
+      onWillPop: () async {
+        return !_isActionCompleted;
+      },
+      child: Container(
+        color: Colors.grey[200],
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                CircleAvatar(
+                  radius: 20,
+                  backgroundColor: Colors.grey,
+                  child: Icon(Icons.business, size: 20, color: Colors.white),
                 ),
-              ),
-            ],
-          ),
-          SizedBox(height: 10),
-          Text(
-            _currentAddress,
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 14),
-          ),
-          SizedBox(height: 20),
-          _buildSlider(maxWidth),
-          SizedBox(height: 20),
-        ],
+                SizedBox(width: 10),
+                Flexible(
+                  child: Text(
+                    'Space Infotech Pvt. Ltd.',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 10),
+            Text(
+              _currentAddress,
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 14),
+            ),
+            SizedBox(height: 20),
+            _buildSlider(context, maxWidth),
+            SizedBox(height: 20),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildSlider(double maxWidth) {
+  Widget _buildSlider(BuildContext context, double maxWidth) {
     final baseColor = widget.isCheckIn ? Colors.green : Colors.red;
     final shimmerBaseColor = widget.isCheckIn ? Colors.green[300]! : Colors.red[300]!;
     final shimmerHighlightColor = widget.isCheckIn ? Colors.green[100]! : Colors.red[100]!;
@@ -151,39 +187,64 @@ class _LocationBottomSheetState extends State<LocationBottomSheet> {
       children: [
         _currentPosition == null
             ? Shimmer.fromColors(
-          baseColor: shimmerBaseColor,
-          highlightColor: shimmerHighlightColor,
-          child: Container(
-            width: double.infinity,
-            height: 60,
-            decoration: BoxDecoration(color: baseColor, borderRadius: BorderRadius.circular(30)),
-          ),
-        )
+                baseColor: shimmerBaseColor,
+                highlightColor: shimmerHighlightColor,
+                child: Container(
+                  width: double.infinity,
+                  height: 60,
+                  decoration: BoxDecoration(
+                    color: baseColor,
+                    borderRadius: BorderRadius.circular(30),
+                  ),
+                ),
+              )
             : Container(
-          width: double.infinity,
-          height: 60,
-          decoration: BoxDecoration(color: baseColor, borderRadius: BorderRadius.circular(30)),
-        ),
-        Positioned(
-          left: _dragPosition,
-          child: GestureDetector(
-            onHorizontalDragUpdate: (details) => _onHorizontalDragUpdate(details, maxWidth),
-            onHorizontalDragEnd: (details) => _onHorizontalDragEnd(maxWidth),
-            child: Container(
-              width: 50,
-              height: 50,
-              decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-              child: Icon(Icons.arrow_forward_ios, color: Colors.black, size: 20),
+                width: double.infinity,
+                height: 60,
+                decoration: BoxDecoration(
+                  color: baseColor.withOpacity(_isActionCompleted ? 0.7 : 1.0),
+                  borderRadius: BorderRadius.circular(30),
+                ),
+              ),
+        if (!_isActionCompleted)
+          Positioned(
+            left: _dragPosition,
+            child: GestureDetector(
+              onHorizontalDragUpdate: (details) => _onHorizontalDragUpdate(details, maxWidth),
+              onHorizontalDragEnd: (details) => _onHorizontalDragEnd(context, maxWidth),
+              child: Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 8,
+                      offset: Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Icon(
+                  Icons.arrow_forward_ios,
+                  color: baseColor,
+                  size: 20,
+                ),
+              ),
             ),
           ),
-        ),
         Positioned.fill(
           child: Center(
             child: Text(
               _isActionCompleted
                   ? (widget.isCheckIn ? 'Checked In!' : 'Checked Out!')
                   : (widget.isCheckIn ? 'Swipe to Check In' : 'Swipe to Check Out'),
-              style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
         ),

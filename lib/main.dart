@@ -1,11 +1,15 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:smartt_attendance/admin_bottom_nav.dart';
 import 'package:smartt_attendance/bottom_navigation_bar.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:smartt_attendance/student%20screen/login_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as sp;
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:smartt_attendance/providers/attendance_screen_provider.dart';
+import 'package:smartt_attendance/providers/profile_screen_provider.dart';
+import 'package:smartt_attendance/providers/attendance_history_provider.dart';
 import 'firebase_options.dart';
 
 Future<void> main() async {
@@ -65,29 +69,42 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Flutter Demo',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-        useMaterial3: true,
-      ),
-      home: FutureBuilder<Widget>(
-        future: _getInitialHomePage(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            // Show loading indicator while checking user state
-            return const Scaffold(
-              body: Center(child: CircularProgressIndicator()),
-            );
-          }
-          if (snapshot.hasData) {
-            // Return the determined home page (LoginScreen, HomeScreen, or TeacherAdminPanel)
-            return snapshot.data!;
-          }
-          // Fallback in case of error
-          return const LoginScreen();
-        },
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(
+          create: (_) => AttendanceScreenProvider(),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => ProfileScreenProvider(),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => AttendanceHistoryProvider(),
+        ),
+      ],
+      child: MaterialApp(
+        title: 'Flutter Demo',
+        debugShowCheckedModeBanner: false,
+        theme: ThemeData(
+          colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+          useMaterial3: true,
+        ),
+        home: FutureBuilder<Widget>(
+          future: _getInitialHomePage(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              // Show loading indicator while checking user state
+              return const Scaffold(
+                body: Center(child: CircularProgressIndicator()),
+              );
+            }
+            if (snapshot.hasData) {
+              // Return the determined home page (LoginScreen, HomeScreen, or TeacherAdminPanel)
+              return snapshot.data!;
+            }
+            // Fallback in case of error
+            return const LoginScreen();
+          },
+        ),
       ),
     );
   }

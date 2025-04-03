@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:ui';
+import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:geolocator/geolocator.dart';
+import '../providers/attendance_screen_provider.dart';
 import '../models/bottom_sheet.dart';
 
 class AttendanceScreen extends StatefulWidget {
@@ -14,41 +14,14 @@ class AttendanceScreen extends StatefulWidget {
 }
 
 class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerProviderStateMixin {
-  bool _isCheckedIn = false;
-  DateTime? _checkInDateTime;
-  Timestamp? _checkInTimestamp;
-  Timestamp? _checkOutTimestamp;
-  String? _totalHours;
   bool _isShowingBottomSheet = false;
   bool _isBlurred = false;
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
 
-  // Firebase instances
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  late String _userId;
-  String? _teacherId; // Store teacher ID
-  Map<String, dynamic>? _officeTimings; // Store office timing settings
-
-  // Location data
-  Position? _checkInLocation;
-  Position? _checkOutLocation;
-
-  // User data from Firestore
-  String? _userName;
-  String? _profileImageUrl;
-  String? _email;
-  String? _mobile;
-
   @override
   void initState() {
     super.initState();
-    _userId = _auth.currentUser?.uid ?? '';
-    if (_userId.isEmpty) {
-      print('No user is currently signed in.');
-    }
-    _startTimeUpdating();
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 800),
@@ -58,310 +31,12 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
       curve: Curves.easeInOut,
     );
     _animationController.forward();
-    _fetchUserData(); // Fetch user data from Firestore
-    _requestLocationPermission();
-    _loadCurrentStatus(); // Load initial status
   }
 
   @override
   void dispose() {
     _animationController.dispose();
     super.dispose();
-  }
-
-  void _startTimeUpdating() {
-    Future.doWhile(() async {
-      await Future.delayed(const Duration(seconds: 1));
-      if (mounted) setState(() {});
-      return true;
-    });
-  }
-
-  Future<void> _requestLocationPermission() async {
-    LocationPermission permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
-        print('Location permissions are denied');
-        return;
-      }
-    }
-    if (permission == LocationPermission.deniedForever) {
-      print('Location permissions are permanently denied');
-      return;
-    }
-  }
-
-  Future<Position> _getCurrentLocation() async {
-    return await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
-  }
-
-  Future<void> _fetchUserData() async {
-    try {
-      DocumentSnapshot userDoc = await _firestore.collection('students').doc(_userId).get();
-      if (userDoc.exists) {
-        final data = userDoc.data() as Map<String, dynamic>;
-        setState(() {
-          _userName = data['name'] ?? 'User';
-          _email = data['email'] ?? _auth.currentUser?.email ?? 'unknown';
-          _mobile = data['mobile'] ?? 'Not provided';
-          _profileImageUrl = data['profileImageUrl'];
-        });
-        
-        // Fetch teacher ID from friends list
-        await _fetchTeacherId();
-      } else {
-        // If no document exists, create a basic one with email from auth
-        await _firestore.collection('students').doc(_userId).set({
-          'createdAt': FieldValue.serverTimestamp(),
-          'email': _auth.currentUser?.email ?? 'unknown',
-          'role': 'student',
-        });
-        setState(() {
-          _userName = 'User'; // Default name until updated
-          _email = _auth.currentUser?.email ?? 'unknown';
-          _mobile = 'Not provided';
-        });
-      }
-    } catch (e) {
-      print('Error fetching user data: $e');
-      setState(() {
-        _userName = 'User'; // Fallback in case of error
-        _email = _auth.currentUser?.email ?? 'unknown';
-        _mobile = 'Not provided';
-      });
-    }
-  }
-
-  Future<void> _fetchTeacherId() async {
-    try {
-      // Get the friends list for the current student
-      QuerySnapshot friendsSnapshot = await _firestore
-          .collection('students')
-          .doc(_userId)
-          .collection('friends')
-          .get();
-
-      if (friendsSnapshot.docs.isNotEmpty) {
-        // Get the first friend's ID (assuming one teacher per student)
-        final friendDoc = friendsSnapshot.docs.first;
-        final friendData = friendDoc.data() as Map<String, dynamic>;
-        final teacherId = friendData['friendId'] as String?;
-
-        if (teacherId != null) {
-          setState(() {
-            _teacherId = teacherId;
-          });
-          // Fetch office timing settings for the teacher
-          await _fetchOfficeTimings();
-        }
-      }
-    } catch (e) {
-      print('Error fetching teacher ID: $e');
-    }
-  }
-
-  Future<void> _fetchOfficeTimings() async {
-    try {
-      if (_teacherId == null) return;
-      
-      final timingDoc = await _firestore
-          .collection('teachers')
-          .doc(_teacherId)
-          .collection('office_timings')
-          .doc('current')
-          .get();
-
-      if (timingDoc.exists) {
-        setState(() {
-          _officeTimings = timingDoc.data();
-        });
-        print('Office timings loaded: $_officeTimings'); // Debug log
-      } else {
-        print('No office timings found for teacher: $_teacherId'); // Debug log
-      }
-    } catch (e) {
-      print('Error fetching office timings: $e');
-    }
-  }
-
-  String _determineAttendanceStatus(DateTime checkInTime) {
-    if (_officeTimings == null) {
-      print('No office timings available, using default logic'); // Debug log
-      return checkInTime.hour < 9 ? 'On Time' : 'Late'; // Default logic
-    }
-
-    try {
-      final lateAfterTime = (_officeTimings!['lateAfterTime'] as Timestamp).toDate();
-      final lateAfterTimeForToday = DateTime(
-        checkInTime.year,
-        checkInTime.month,
-        checkInTime.day,
-        lateAfterTime.hour,
-        lateAfterTime.minute,
-      );
-
-      final isLate = checkInTime.isAfter(lateAfterTimeForToday);
-      print('Check-in time: ${checkInTime.toString()}, Late after: ${lateAfterTimeForToday.toString()}, Is late: $isLate'); // Debug log
-      return isLate ? 'Late' : 'On Time';
-    } catch (e) {
-      print('Error determining attendance status: $e'); // Debug log
-      return checkInTime.hour < 9 ? 'On Time' : 'Late'; // Fallback to default logic
-    }
-  }
-
-  Future<void> _saveAttendance(Map<String, dynamic> attendanceData) async {
-    try {
-      await _firestore
-          .collection('students')
-          .doc(_userId)
-          .collection('attendance')
-          .add(attendanceData);
-    } catch (e) {
-      print('Error saving attendance: $e');
-    }
-  }
-
-  Future<void> _loadCurrentStatus() async {
-    try {
-      DocumentSnapshot userDoc = await _firestore.collection('students').doc(_userId).get();
-      if (userDoc.exists) {
-        final data = userDoc.data() as Map<String, dynamic>;
-        setState(() {
-          _isCheckedIn = data['isCheckedIn'] ?? false;
-          _checkInTimestamp = data['checkInTime'];
-          _checkOutTimestamp = data['checkOutTime'];
-          _totalHours = data['totalHours'];
-          if (_checkInTimestamp != null) {
-            _checkInDateTime = _checkInTimestamp!.toDate();
-          }
-        });
-      }
-    } catch (e) {
-      print('Error loading status: $e');
-    }
-  }
-
-  Future<void> _updateCheckInStatus(DateTime punchTime, Position location) async {
-    try {
-      final timestamp = Timestamp.fromDate(punchTime);
-      final status = _determineAttendanceStatus(punchTime);
-      
-      await _firestore.collection('students').doc(_userId).set({
-        'isCheckedIn': true,
-        'checkInTime': timestamp,
-        'checkInLocation': {
-          'latitude': location.latitude,
-          'longitude': location.longitude,
-        },
-        'status': status,
-        'checkOutTime': null,
-        'totalHours': null,
-        'checkOutLocation': null,
-        'lastUpdated': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-    } catch (e) {
-      print('Error updating check-in status: $e');
-      _showAnimatedSnackBar("Error", "Failed to check in", Icons.error);
-    }
-  }
-
-  Future<void> _updateCheckOutStatus(DateTime punchTime, Position location) async {
-    try {
-      final timestamp = Timestamp.fromDate(punchTime);
-      String totalHours = '';
-      if (_checkInDateTime != null) {
-        Duration difference = punchTime.difference(_checkInDateTime!);
-        int hours = difference.inHours;
-        int minutes = difference.inMinutes.remainder(60);
-        totalHours = "${hours}h ${minutes}m";
-      }
-
-      final status = _determineAttendanceStatus(_checkInDateTime!);
-
-      await _firestore.collection('students').doc(_userId).set({
-        'isCheckedIn': false,
-        'checkOutTime': timestamp,
-        'checkOutLocation': {
-          'latitude': location.latitude,
-          'longitude': location.longitude,
-        },
-        'totalHours': totalHours,
-        'lastUpdated': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-
-      await _saveAttendance({
-        'checkInTime': _checkInTimestamp,
-        'checkInLocation': _checkInLocation != null
-            ? {'latitude': _checkInLocation!.latitude, 'longitude': _checkInLocation!.longitude}
-            : null,
-        'checkOutTime': timestamp,
-        'checkOutLocation': {'latitude': location.latitude, 'longitude': location.longitude},
-        'totalHours': totalHours,
-        'date': Timestamp.fromDate(punchTime),
-        'status': status,
-      });
-    } catch (e) {
-      print('Error updating check-out status: $e');
-      _showAnimatedSnackBar("Error", "Failed to check out", Icons.error);
-    }
-  }
-
-  void _handleCheckIn(DateTime punchTime) async {
-    HapticFeedback.mediumImpact();
-    _checkInLocation = await _getCurrentLocation();
-
-    await _updateCheckInStatus(punchTime, _checkInLocation!);
-
-    setState(() {
-      _isCheckedIn = true;
-      _checkInDateTime = punchTime;
-      _checkInTimestamp = Timestamp.fromDate(punchTime);
-      _checkOutTimestamp = null;
-      _totalHours = null;
-      _isShowingBottomSheet = false;
-      _isBlurred = false;
-    });
-    _showAnimatedSnackBar("Check-in successful", "Checked in at ${_formatTime(punchTime)}", Icons.check_circle_rounded);
-  }
-
-  void _handleCheckOut(DateTime punchTime) async {
-    HapticFeedback.mediumImpact();
-    _checkOutLocation = await _getCurrentLocation();
-
-    await _updateCheckOutStatus(punchTime, _checkOutLocation!);
-
-    String totalHours = '';
-    if (_checkInDateTime != null) {
-      Duration difference = punchTime.difference(_checkInDateTime!);
-      int hours = difference.inHours;
-      int minutes = difference.inMinutes.remainder(60);
-      totalHours = "${hours}h ${minutes}m";
-    }
-
-    setState(() {
-      _checkOutTimestamp = Timestamp.fromDate(punchTime);
-      _totalHours = totalHours;
-      _isCheckedIn = false;
-      _checkInDateTime = null;
-      _checkInTimestamp = null;
-      _isShowingBottomSheet = false;
-      _isBlurred = false;
-      _checkInLocation = null;
-      _checkOutLocation = null;
-    });
-    _showAnimatedSnackBar("Check-out successful", "Total hours: $_totalHours", Icons.access_time_filled_rounded);
-  }
-
-  String _formatTime(DateTime time) {
-    final hour = time.hour > 12 ? time.hour - 12 : time.hour == 0 ? 12 : time.hour;
-    final amPm = time.hour >= 12 ? 'PM' : 'AM';
-    return "$hour:${time.minute.toString().padLeft(2, '0')} $amPm";
-  }
-
-  String _formatTimestamp(Timestamp? timestamp) {
-    if (timestamp == null) return '--:--';
-    return _formatTime(timestamp.toDate());
   }
 
   void _showAnimatedSnackBar(String title, String message, IconData icon) {
@@ -376,7 +51,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: _isCheckedIn
+              colors: context.read<AttendanceScreenProvider>().isCheckedIn
                   ? [Colors.orange.shade800, Colors.red.shade700]
                   : [Colors.green.shade600, Colors.teal.shade700],
               begin: Alignment.topLeft,
@@ -438,8 +113,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
       backgroundColor: Colors.transparent,
       barrierColor: Colors.black.withOpacity(0.5),
       builder: (context) => LocationBottomSheet(
-        onPunchIn: _handleCheckIn,
-        onPunchOut: isCheckIn ? null : _handleCheckOut,
         isCheckIn: isCheckIn,
       ),
     ).whenComplete(() {
@@ -450,55 +123,101 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
     });
   }
 
+  String _formatTime(DateTime time) {
+    final hour = time.hour > 12 ? time.hour - 12 : time.hour == 0 ? 12 : time.hour;
+    final amPm = time.hour >= 12 ? 'PM' : 'AM';
+    return "$hour:${time.minute.toString().padLeft(2, '0')} $amPm";
+  }
+
+  String _formatTimestamp(Timestamp? timestamp) {
+    if (timestamp == null) return '--:--';
+    return _formatTime(timestamp.toDate());
+  }
+
+  String _getWeekday(int weekday) {
+    switch (weekday) {
+      case 1: return 'Monday';
+      case 2: return 'Tuesday';
+      case 3: return 'Wednesday';
+      case 4: return 'Thursday';
+      case 5: return 'Friday';
+      case 6: return 'Saturday';
+      case 7: return 'Sunday';
+      default: return '';
+    }
+  }
+
+  String _getMonth(int month) {
+    switch (month) {
+      case 1: return 'January';
+      case 2: return 'February';
+      case 3: return 'March';
+      case 4: return 'April';
+      case 5: return 'May';
+      case 6: return 'June';
+      case 7: return 'July';
+      case 8: return 'August';
+      case 9: return 'September';
+      case 10: return 'October';
+      case 11: return 'November';
+      case 12: return 'December';
+      default: return '';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: FadeTransition(
-        opacity: _fadeAnimation,
-        child: Stack(
-          children: [
-            Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [Colors.grey[50]!, Colors.grey[100]!, Colors.grey[200]!],
-                ),
-              ),
-            ),
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 300),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: _isBlurred ? 5.0 : 0.0, sigmaY: _isBlurred ? 5.0 : 0.0),
-                child: SafeArea(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildHeader(),
-                        const SizedBox(height: 30),
-                        _buildTimeDisplay(),
-                        const SizedBox(height: 40),
-                        _buildAttendanceButton(),
-                        const SizedBox(height: 40),
-                        _buildAttendanceStats(),
-                        const SizedBox(height: 20),
-                        Center(),
-                        const SizedBox(height: 20),
-                      ],
+    return Consumer<AttendanceScreenProvider>(
+      builder: (context, provider, child) {
+        return Scaffold(
+          body: FadeTransition(
+            opacity: _fadeAnimation,
+            child: Stack(
+              children: [
+                Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [Colors.grey[50]!, Colors.grey[100]!, Colors.grey[200]!],
                     ),
                   ),
                 ),
-              ),
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: _isBlurred ? 5.0 : 0.0, sigmaY: _isBlurred ? 5.0 : 0.0),
+                    child: SafeArea(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildHeader(provider),
+                            const SizedBox(height: 30),
+                            _buildTimeDisplay(),
+                            const SizedBox(height: 40),
+                            _buildAttendanceButton(provider),
+                            const SizedBox(height: 40),
+                            _buildAttendanceStats(provider),
+                            const SizedBox(height: 20),
+                            Center(),
+                            const SizedBox(height: 20),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildHeader(AttendanceScreenProvider provider) {
     return Padding(
       padding: const EdgeInsets.only(top: 20.0),
       child: Row(
@@ -508,7 +227,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Hey $_userName!',
+                'Hey ${provider.userName}!',
                 style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.grey[800], letterSpacing: -0.5),
               ),
               const SizedBox(height: 4),
@@ -521,9 +240,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                     style: TextStyle(
                       fontSize: 16,
                       color: Colors.grey[600],
-                      fontWeight: _isCheckedIn ? FontWeight.w500 : FontWeight.w400,
+                      fontWeight: provider.isCheckedIn ? FontWeight.w500 : FontWeight.w400,
                     ),
-                    child: Text(_isCheckedIn ? 'Working now' : 'Ready to start?'),
+                    child: Text(provider.isCheckedIn ? 'Working now' : 'Ready to start?'),
                   ),
                 ],
               ),
@@ -548,8 +267,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                 child: CircleAvatar(
                   radius: 24,
                   backgroundColor: Colors.white,
-                  backgroundImage: _profileImageUrl != null && _profileImageUrl!.isNotEmpty
-                      ? NetworkImage(_profileImageUrl!)
+                  backgroundImage: provider.profileImageUrl != null && provider.profileImageUrl!.isNotEmpty
+                      ? NetworkImage(provider.profileImageUrl!)
                       : const AssetImage('assets/ab.jpg') as ImageProvider,
                 ),
               ),
@@ -617,16 +336,16 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
     );
   }
 
-  Widget _buildAttendanceButton() {
+  Widget _buildAttendanceButton(AttendanceScreenProvider provider) {
     return Center(
       child: NeumorphicCheckInButton(
-        isCheckedIn: _isCheckedIn,
-        onTap: () => _showLocationBottomSheet(_isCheckedIn ? false : true),
+        isCheckedIn: provider.isCheckedIn,
+        onTap: () => _showLocationBottomSheet(provider.isCheckedIn ? false : true),
       ),
     );
   }
 
-  Widget _buildAttendanceStats() {
+  Widget _buildAttendanceStats(AttendanceScreenProvider provider) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 8),
       decoration: BoxDecoration(
@@ -639,25 +358,25 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
           _buildStatItem(
-            _isCheckedIn ? Icons.login_rounded : Icons.schedule_rounded,
+            provider.isCheckedIn ? Icons.login_rounded : Icons.schedule_rounded,
             'Check In',
-            _checkInTimestamp != null ? _formatTimestamp(_checkInTimestamp) : null,
+            provider.checkInTimestamp != null ? _formatTimestamp(provider.checkInTimestamp) : null,
             Colors.green.shade700,
             'check-in',
           ),
           _buildDivider(),
           _buildStatItem(
-            _isCheckedIn ? Icons.logout_rounded : Icons.schedule_rounded,
+            provider.isCheckedIn ? Icons.logout_rounded : Icons.schedule_rounded,
             'Check Out',
-            _checkOutTimestamp != null ? _formatTimestamp(_checkOutTimestamp) : null,
+            provider.checkOutTimestamp != null ? _formatTimestamp(provider.checkOutTimestamp) : null,
             Colors.red.shade700,
             'check-out',
           ),
           _buildDivider(),
           _buildStatItem(
-            _isCheckedIn ? Icons.timelapse_rounded : Icons.timer_rounded,
+            provider.isCheckedIn ? Icons.timelapse_rounded : Icons.timer_rounded,
             'Total',
-            _totalHours,
+            provider.totalHours,
             Colors.blue.shade700,
             'total-hours',
           ),
@@ -703,37 +422,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
         ],
       ),
     );
-  }
-
-  String _getWeekday(int weekday) {
-    switch (weekday) {
-      case 1: return 'Monday';
-      case 2: return 'Tuesday';
-      case 3: return 'Wednesday';
-      case 4: return 'Thursday';
-      case 5: return 'Friday';
-      case 6: return 'Saturday';
-      case 7: return 'Sunday';
-      default: return '';
-    }
-  }
-
-  String _getMonth(int month) {
-    switch (month) {
-      case 1: return 'January';
-      case 2: return 'February';
-      case 3: return 'March';
-      case 4: return 'April';
-      case 5: return 'May';
-      case 6: return 'June';
-      case 7: return 'July';
-      case 8: return 'August';
-      case 9: return 'September';
-      case 10: return 'October';
-      case 11: return 'November';
-      case 12: return 'December';
-      default: return '';
-    }
   }
 }
 
