@@ -10,6 +10,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:smartt_attendance/providers/attendance_screen_provider.dart';
 import 'package:smartt_attendance/providers/profile_screen_provider.dart';
 import 'package:smartt_attendance/providers/attendance_history_provider.dart';
+import 'package:smartt_attendance/providers/leave_provider.dart';
+import 'package:smartt_attendance/providers/leave_history_provider.dart';
+import 'package:smartt_attendance/providers/admin_dashboard_provider.dart';
+import 'package:smartt_attendance/providers/employee_list_provider.dart';
 import 'firebase_options.dart';
 
 Future<void> main() async {
@@ -79,6 +83,18 @@ class MyApp extends StatelessWidget {
         ),
         ChangeNotifierProvider(
           create: (_) => AttendanceHistoryProvider(),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => LeaveProvider(),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => LeaveHistoryProvider(),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => AdminDashboardProvider(),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => EmployeeListProvider(),
         ),
       ],
       child: MaterialApp(

@@ -250,27 +250,30 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
           ),
           Hero(
             tag: 'profile',
-            child: Material(
-              elevation: 8,
-              shadowColor: Colors.black38,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-              child: Container(
-                padding: const EdgeInsets.all(2),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Colors.blue.shade400, Colors.purple.shade500],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
+            child: Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.6),
+                    blurRadius: 10,
+                    spreadRadius: 2,
+                    offset: const Offset(0, 4),
                   ),
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                child: CircleAvatar(
-                  radius: 24,
-                  backgroundColor: Colors.white,
-                  backgroundImage: provider.profileImageUrl != null && provider.profileImageUrl!.isNotEmpty
-                      ? NetworkImage(provider.profileImageUrl!)
-                      : const AssetImage('assets/ab.jpg') as ImageProvider,
-                ),
+                  BoxShadow(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    blurRadius: 5,
+                    spreadRadius: -2,
+                    offset: const Offset(-2, -2),
+                  ),
+                ],
+              ),
+              child: CircleAvatar(
+                radius: 28,
+                backgroundColor: Colors.white,
+                backgroundImage: provider.profileImageUrl != null && provider.profileImageUrl!.isNotEmpty
+                    ? NetworkImage(provider.profileImageUrl!)
+                    : const AssetImage('assets/ab.jpg') as ImageProvider,
               ),
             ),
           ),

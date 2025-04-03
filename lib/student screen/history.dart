@@ -5,8 +5,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:provider/provider.dart';
-
-import '../provider/attendance_history_notifier.dart';
 import '../providers/attendance_history_provider.dart';
 
 class AttendanceHistoryScreen extends StatelessWidget {

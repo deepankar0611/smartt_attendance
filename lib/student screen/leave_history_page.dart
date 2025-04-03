@@ -1,33 +1,28 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../providers/leave_history_provider.dart';
 import 'leave.dart';
 
-class LeaveHistoryPage extends StatefulWidget {
+class LeaveHistoryPage extends StatelessWidget {
   const LeaveHistoryPage({Key? key}) : super(key: key);
 
   @override
-  State<LeaveHistoryPage> createState() => _LeaveHistoryPageState();
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider(
+      create: (_) => LeaveHistoryProvider(),
+      child: const _LeaveHistoryContent(),
+    );
+  }
 }
 
-class _LeaveHistoryPageState extends State<LeaveHistoryPage> {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseAuth _auth = FirebaseAuth.instance;
+class _LeaveHistoryContent extends StatelessWidget {
+  const _LeaveHistoryContent({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    final String? userId = _auth.currentUser?.uid;
-
-    if (userId == null) {
-      return Scaffold(
-        appBar: AppBar(
-          title: const Text('Leave History'),
-          backgroundColor: const Color(0xFF1B5E20),
-        ),
-        body: const Center(child: Text('User not authenticated')),
-      );
-    }
+    final provider = Provider.of<LeaveHistoryProvider>(context);
 
     return Scaffold(
       appBar: AppBar(
@@ -52,12 +47,7 @@ class _LeaveHistoryPageState extends State<LeaveHistoryPage> {
         ),
       ),
       body: StreamBuilder<QuerySnapshot>(
-        stream: _firestore
-            .collection('students')
-            .doc(userId)
-            .collection('leaves')
-            .orderBy('submittedAt', descending: true)
-            .snapshots(),
+        stream: provider.leaveStream,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -167,10 +157,7 @@ class _LeaveHistoryPageState extends State<LeaveHistoryPage> {
           Navigator.push(
             context,
             MaterialPageRoute(builder: (context) => const LeaveApplicationPage()),
-          ).then((_) {
-            // Refresh the leave history when returning from the application page
-            setState(() {});
-          });
+          );
         },
         backgroundColor: const Color(0xFF1B5E20),
         child: const Icon(Icons.add, color: Colors.white),

@@ -1,168 +1,29 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'leave_history_page.dart'; // Import the new page
+import 'package:provider/provider.dart';
+import '../providers/leave_provider.dart';
+import 'leave_history_page.dart';
 
-class LeaveApplicationPage extends StatefulWidget {
+class LeaveApplicationPage extends StatelessWidget {
   const LeaveApplicationPage({Key? key}) : super(key: key);
 
   @override
-  State<LeaveApplicationPage> createState() => _LeaveApplicationPageState();
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider(
+      create: (_) => LeaveProvider(),
+      child: const _LeaveApplicationContent(),
+    );
+  }
 }
 
-class _LeaveApplicationPageState extends State<LeaveApplicationPage> {
-  final _formKey = GlobalKey<FormState>();
-  DateTime? _startDate;
-  DateTime? _endDate;
-  final TextEditingController _reasonController = TextEditingController();
-  String _selectedLeaveType = 'Casual Leave';
-  final List<String> _leaveTypes = ['Casual Leave', 'Sick Leave', 'Vacation', 'Personal'];
-
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-
-  @override
-  void dispose() {
-    _reasonController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _selectDate(BuildContext context, bool isStartDate) async {
-    final DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: isStartDate
-          ? _startDate ?? DateTime.now()
-          : _endDate ?? (_startDate ?? DateTime.now()).add(const Duration(days: 1)),
-      firstDate: isStartDate ? DateTime.now() : (_startDate ?? DateTime.now()),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: ColorScheme.light(
-              primary: const Color(0xFF1B5E20),
-              onPrimary: Colors.white,
-              onSurface: Colors.black,
-              secondary: const Color(0xFF2E7D32),
-            ),
-            textButtonTheme: TextButtonThemeData(
-              style: TextButton.styleFrom(
-                foregroundColor: const Color(0xFF1B5E20),
-              ),
-            ),
-          ),
-          child: child!,
-        );
-      },
-    );
-
-    if (picked != null) {
-      setState(() {
-        if (isStartDate) {
-          _startDate = picked;
-          if (_endDate != null && _endDate!.isBefore(_startDate!)) {
-            _endDate = _startDate;
-          }
-        } else {
-          _endDate = picked;
-        }
-      });
-    }
-  }
-
-  Future<void> _submitApplication() async {
-    if (_formKey.currentState!.validate()) {
-      try {
-        final String? userId = _auth.currentUser?.uid;
-        if (userId == null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Row(
-                children: const [
-                  Icon(Icons.error, color: Colors.white),
-                  SizedBox(width: 10),
-                  Text('User not authenticated'),
-                ],
-              ),
-              backgroundColor: Colors.red,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-          );
-          return;
-        }
-
-        final leaveData = {
-          'studentId': userId,
-          'leaveType': _selectedLeaveType,
-          'startDate': Timestamp.fromDate(_startDate!),
-          'endDate': Timestamp.fromDate(_endDate!),
-          'reason': _reasonController.text.trim(),
-          'status': 'Pending',
-          'submittedAt': FieldValue.serverTimestamp(),
-        };
-
-        await _firestore
-            .collection('students')
-            .doc(userId)
-            .collection('leaves')
-            .add(leaveData);
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: const [
-                Icon(Icons.check_circle, color: Colors.white),
-                SizedBox(width: 10),
-                Text('Leave application submitted successfully'),
-              ],
-            ),
-            backgroundColor: const Color(0xFF2E7D32),
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-          ),
-        );
-
-        setState(() {
-          _startDate = null;
-          _endDate = null;
-          _reasonController.clear();
-          _selectedLeaveType = 'Casual Leave';
-        });
-      } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.error, color: Colors.white),
-                const SizedBox(width: 10),
-                Text('Failed to submit leave application: $e'),
-              ],
-            ),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-          ),
-        );
-      }
-    }
-  }
-
-  void _navigateToLeaveHistory() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const LeaveHistoryPage()),
-    );
-  }
+class _LeaveApplicationContent extends StatelessWidget {
+  const _LeaveApplicationContent({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
+    final provider = Provider.of<LeaveProvider>(context);
+    final _formKey = GlobalKey<FormState>();
+
     return Scaffold(
       extendBodyBehindAppBar: true,
       backgroundColor: Colors.white,
@@ -193,7 +54,10 @@ class _LeaveApplicationPageState extends State<LeaveApplicationPage> {
         actions: [
           IconButton(
             icon: const Icon(Icons.history, color: Colors.white),
-            onPressed: _navigateToLeaveHistory, // Navigate to LeaveHistoryPage
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const LeaveHistoryPage()),
+            ),
           ),
         ],
       ),
@@ -312,16 +176,16 @@ class _LeaveApplicationPageState extends State<LeaveApplicationPage> {
                           child: DropdownButtonHideUnderline(
                             child: DropdownButton<String>(
                               isExpanded: true,
-                              value: _selectedLeaveType,
+                              value: provider.selectedLeaveType,
                               icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF1B5E20)),
                               elevation: 16,
                               style: const TextStyle(color: Colors.black, fontSize: 16),
                               onChanged: (String? newValue) {
-                                setState(() {
-                                  _selectedLeaveType = newValue!;
-                                });
+                                if (newValue != null) {
+                                  provider.setLeaveType(newValue);
+                                }
                               },
-                              items: _leaveTypes.map<DropdownMenuItem<String>>((String value) {
+                              items: provider.leaveTypes.map<DropdownMenuItem<String>>((String value) {
                                 return DropdownMenuItem<String>(
                                   value: value,
                                   child: Text(value),
@@ -370,7 +234,7 @@ class _LeaveApplicationPageState extends State<LeaveApplicationPage> {
                           children: [
                             Expanded(
                               child: GestureDetector(
-                                onTap: () => _selectDate(context, true),
+                                onTap: () => _selectDate(context, true, provider),
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
                                   decoration: BoxDecoration(
@@ -394,13 +258,13 @@ class _LeaveApplicationPageState extends State<LeaveApplicationPage> {
                                           ),
                                           const SizedBox(height: 4),
                                           Text(
-                                            _startDate == null
+                                            provider.startDate == null
                                                 ? 'Select date'
-                                                : DateFormat('MMM dd, yyyy').format(_startDate!),
+                                                : DateFormat('MMM dd, yyyy').format(provider.startDate!),
                                             style: TextStyle(
-                                              color: _startDate == null ? Colors.grey : Colors.black,
+                                              color: provider.startDate == null ? Colors.grey : Colors.black,
                                               fontSize: 14,
-                                              fontWeight: _startDate == null ? FontWeight.normal : FontWeight.w500,
+                                              fontWeight: provider.startDate == null ? FontWeight.normal : FontWeight.w500,
                                             ),
                                           ),
                                         ],
@@ -413,24 +277,26 @@ class _LeaveApplicationPageState extends State<LeaveApplicationPage> {
                             const SizedBox(width: 12),
                             Expanded(
                               child: GestureDetector(
-                                onTap: () => _startDate == null
-                                    ? ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Row(
-                                      children: const [
-                                        Icon(Icons.info, color: Colors.white),
-                                        SizedBox(width: 10),
-                                        Text('Please select start date first'),
-                                      ],
-                                    ),
-                                    backgroundColor: Colors.orange,
-                                    behavior: SnackBarBehavior.floating,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                  ),
-                                )
-                                    : _selectDate(context, false),
+                                onTap: provider.startDate == null
+                                    ? () {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(
+                                            content: Row(
+                                              children: const [
+                                                Icon(Icons.info, color: Colors.white),
+                                                SizedBox(width: 10),
+                                                Text('Please select start date first'),
+                                              ],
+                                            ),
+                                            backgroundColor: Colors.orange,
+                                            behavior: SnackBarBehavior.floating,
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius: BorderRadius.circular(10),
+                                            ),
+                                          ),
+                                        );
+                                      }
+                                    : () => _selectDate(context, false, provider),
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
                                   decoration: BoxDecoration(
@@ -454,13 +320,13 @@ class _LeaveApplicationPageState extends State<LeaveApplicationPage> {
                                           ),
                                           const SizedBox(height: 4),
                                           Text(
-                                            _endDate == null
+                                            provider.endDate == null
                                                 ? 'Select date'
-                                                : DateFormat('MMM dd, yyyy').format(_endDate!),
+                                                : DateFormat('MMM dd, yyyy').format(provider.endDate!),
                                             style: TextStyle(
-                                              color: _endDate == null ? Colors.grey : Colors.black,
+                                              color: provider.endDate == null ? Colors.grey : Colors.black,
                                               fontSize: 14,
-                                              fontWeight: _endDate == null ? FontWeight.normal : FontWeight.w500,
+                                              fontWeight: provider.endDate == null ? FontWeight.normal : FontWeight.w500,
                                             ),
                                           ),
                                         ],
@@ -472,21 +338,21 @@ class _LeaveApplicationPageState extends State<LeaveApplicationPage> {
                             ),
                           ],
                         ),
-                        if (_startDate != null && _endDate != null)
+                        if (provider.startDate != null && provider.endDate != null)
                           Container(
                             margin: const EdgeInsets.only(top: 12),
                             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                             decoration: BoxDecoration(
-                              color: Colors.green.withValues(alpha: 0.1),
+                              color: Colors.green.withOpacity(0.1),
                               borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
+                              border: Border.all(color: Colors.green.withOpacity(0.3)),
                             ),
                             child: Row(
                               children: [
                                 const Icon(Icons.timer, size: 18, color: Color(0xFF1B5E20)),
                                 const SizedBox(width: 8),
                                 Text(
-                                  'Duration: ${_endDate!.difference(_startDate!).inDays + 1} day(s)',
+                                  'Duration: ${provider.endDate!.difference(provider.startDate!).inDays + 1} day(s)',
                                   style: const TextStyle(
                                     color: Color(0xFF1B5E20),
                                     fontWeight: FontWeight.w500,
@@ -532,7 +398,7 @@ class _LeaveApplicationPageState extends State<LeaveApplicationPage> {
                         ),
                         const SizedBox(height: 12),
                         TextFormField(
-                          controller: _reasonController,
+                          controller: provider.reasonController,
                           validator: (value) {
                             if (value == null || value.trim().isEmpty) {
                               return 'Please provide a reason for your leave';
@@ -582,28 +448,32 @@ class _LeaveApplicationPageState extends State<LeaveApplicationPage> {
                       ),
                     ),
                     child: ElevatedButton(
-                      onPressed: () {
-                        if (_startDate == null || _endDate == null) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Row(
-                                children: const [
-                                  Icon(Icons.warning, color: Colors.white),
-                                  SizedBox(width: 10),
-                                  Text('Please select both start and end dates'),
-                                ],
-                              ),
-                              backgroundColor: Colors.orange,
-                              behavior: SnackBarBehavior.floating,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                            ),
-                          );
-                          return;
-                        }
-                        _submitApplication();
-                      },
+                      onPressed: provider.isSubmitting
+                          ? null
+                          : () {
+                              if (provider.startDate == null || provider.endDate == null) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Row(
+                                      children: const [
+                                        Icon(Icons.warning, color: Colors.white),
+                                        SizedBox(width: 10),
+                                        Text('Please select both start and end dates'),
+                                      ],
+                                    ),
+                                    backgroundColor: Colors.orange,
+                                    behavior: SnackBarBehavior.floating,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                  ),
+                                );
+                                return;
+                              }
+                              if (_formKey.currentState!.validate()) {
+                                provider.submitApplication(context);
+                              }
+                            },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.transparent,
                         shadowColor: Colors.transparent,
@@ -614,12 +484,22 @@ class _LeaveApplicationPageState extends State<LeaveApplicationPage> {
                       ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
-                        children: const [
-                          Icon(Icons.send, color: Colors.white),
-                          SizedBox(width: 10),
+                        children: [
+                          if (provider.isSubmitting)
+                            const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2,
+                              ),
+                            )
+                          else
+                            const Icon(Icons.send, color: Colors.white),
+                          const SizedBox(width: 10),
                           Text(
-                            'Submit Application',
-                            style: TextStyle(
+                            provider.isSubmitting ? 'Submitting...' : 'Submit Application',
+                            style: const TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
                               color: Colors.white,
@@ -636,5 +516,42 @@ class _LeaveApplicationPageState extends State<LeaveApplicationPage> {
         ),
       ),
     );
+  }
+
+  Future<void> _selectDate(BuildContext context, bool isStartDate, LeaveProvider provider) async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: isStartDate
+          ? provider.startDate ?? DateTime.now()
+          : provider.endDate ?? (provider.startDate ?? DateTime.now()).add(const Duration(days: 1)),
+      firstDate: isStartDate ? DateTime.now() : (provider.startDate ?? DateTime.now()),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.light(
+              primary: const Color(0xFF1B5E20),
+              onPrimary: Colors.white,
+              onSurface: Colors.black,
+              secondary: const Color(0xFF2E7D32),
+            ),
+            textButtonTheme: TextButtonThemeData(
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFF1B5E20),
+              ),
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      if (isStartDate) {
+        provider.setStartDate(picked);
+      } else {
+        provider.setEndDate(picked);
+      }
+    }
   }
 }

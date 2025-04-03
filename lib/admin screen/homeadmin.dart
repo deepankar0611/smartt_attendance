@@ -1,26 +1,33 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:smartt_attendance/admin%20screen/project_list_screen.dart';
 import '../utils/attendance_utils.dart';
+import 'package:smartt_attendance/providers/admin_dashboard_provider.dart';
 
 import 'addgroup.dart'; // ProjectAssignmentScreen
 import 'employee_list_screen.dart';
 import 'analyzer_screen.dart';
 
-class AdminDashboard extends StatefulWidget {
+class AdminDashboard extends StatelessWidget {
   const AdminDashboard({Key? key}) : super(key: key);
 
   @override
-  State<AdminDashboard> createState() => _AdminDashboardState();
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider(
+      create: (_) => AdminDashboardProvider()..initialize(),
+      child: const DashboardHome(),
+    );
+  }
 }
 
-class _AdminDashboardState extends State<AdminDashboard> {
+class DashboardHome extends StatefulWidget {
+  const DashboardHome({super.key});
+
   @override
-  Widget build(BuildContext context) {
-    return const DashboardHome();
-  }
+  State<DashboardHome> createState() => _DashboardHomeState();
 }
 
 class _DashboardHomeState extends State<DashboardHome> with SingleTickerProviderStateMixin {
@@ -315,14 +322,18 @@ class _DashboardHomeState extends State<DashboardHome> with SingleTickerProvider
         ),
         leading: Padding(
           padding: const EdgeInsets.only(left: 16.0),
-          child: _isImageLoading
-              ? const CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Colors.white))
-              : CircleAvatar(
-            radius: 16,
-            backgroundImage: _profileImageUrl != null && _profileImageUrl!.isNotEmpty
-                ? NetworkImage(_profileImageUrl!)
-                : const NetworkImage('https://i.pravatar.cc/100'),
-            onBackgroundImageError: (e, s) => print('Error loading profile image: $e'),
+          child: Consumer<AdminDashboardProvider>(
+            builder: (context, provider, _) {
+              return provider.isImageLoading
+                  ? const CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Colors.white))
+                  : CircleAvatar(
+                      radius: 16,
+                      backgroundImage: provider.profileImageUrl != null && provider.profileImageUrl!.isNotEmpty
+                          ? NetworkImage(provider.profileImageUrl!)
+                          : const NetworkImage('https://i.pravatar.cc/100'),
+                      onBackgroundImageError: (e, s) => print('Error loading profile image: $e'),
+                    );
+            },
           ),
         ),
         actions: [
@@ -333,114 +344,124 @@ class _DashboardHomeState extends State<DashboardHome> with SingleTickerProvider
           const SizedBox(width: 16),
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _summaryData.isEmpty
-          ? const Center(child: Text('No data available', style: TextStyle(fontSize: 18, color: Colors.grey)))
-          : SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(12.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SummaryCards(summaryData: _summaryData),
-              const SizedBox(height: 16),
-              Card(
-                elevation: 4,
-                shadowColor: Colors.grey.withOpacity(0.2),
-                color: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  side: BorderSide(color: Colors.grey.shade200),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(12.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      body: Consumer<AdminDashboardProvider>(
+        builder: (context, provider, _) {
+          if (provider.isLoading) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (provider.summaryData.isEmpty) {
+            return const Center(child: Text('No data available', style: TextStyle(fontSize: 18, color: Colors.grey)));
+          }
+          return SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SummaryCards(summaryData: provider.summaryData),
+                  const SizedBox(height: 16),
+                  Card(
+                    elevation: 4,
+                    shadowColor: Colors.grey.withOpacity(0.2),
+                    color: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      side: BorderSide(color: Colors.grey.shade200),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Project Status', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                          TextButton.icon(
-                            icon: const Icon(Icons.add, size: 18),
-                            label: const Text('Add', style: TextStyle(fontSize: 12)),
-                            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ProjectAssignmentScreen())),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text('Project Status', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                              TextButton.icon(
+                                icon: const Icon(Icons.add, size: 18),
+                                label: const Text('Add', style: TextStyle(fontSize: 12)),
+                                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ProjectAssignmentScreen())),
+                              ),
+                            ],
                           ),
+                          const SizedBox(height: 12),
+                          ProjectStatusList(projects: provider.projects),
                         ],
                       ),
-                      const SizedBox(height: 12),
-                      ProjectStatusList(projects: _projects),
-                    ],
+                    ),
                   ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+      floatingActionButton: Consumer<AdminDashboardProvider>(
+        builder: (context, provider, _) {
+          return Column(
+            mainAxisAlignment: MainAxisAlignment.end,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              AnimatedOpacity(
+                opacity: provider.isMenuOpen ? 1.0 : 0.0,
+                duration: const Duration(milliseconds: 200),
+                child: Column(
+                  children: [
+                    FloatingActionButton.extended(
+                      heroTag: 'fab_department',
+                      onPressed: () {
+                        Navigator.push(context, MaterialPageRoute(builder: (context) => const EmployeeListScreen()));
+                        provider.toggleMenu();
+                      },
+                      backgroundColor: Colors.white,
+                      foregroundColor: Colors.black,
+                      label: const Text('Department'),
+                      icon: const Icon(Icons.business),
+                      elevation: 4,
+                    ),
+                    const SizedBox(height: 10),
+                    FloatingActionButton.extended(
+                      heroTag: 'fab_group',
+                      onPressed: () {
+                        Navigator.push(context, MaterialPageRoute(builder: (context) => const ProjectListScreen()));
+                        provider.toggleMenu();
+                      },
+                      backgroundColor: Colors.white,
+                      foregroundColor: Colors.black,
+                      label: const Text('Group'),
+                      icon: const Icon(Icons.group),
+                      elevation: 4,
+                    ),
+                    const SizedBox(height: 10),
+                    FloatingActionButton.extended(
+                      heroTag: 'fab_analyzer',
+                      onPressed: () {
+                        Navigator.push(context, MaterialPageRoute(builder: (context) => const AnalyzerScreen()));
+                        provider.toggleMenu();
+                      },
+                      backgroundColor: Colors.white,
+                      foregroundColor: Colors.black,
+                      label: const Text('Analyzer'),
+                      icon: const Icon(Icons.analytics),
+                      elevation: 4,
+                    ),
+                    const SizedBox(height: 10),
+                  ],
+                ),
+              ),
+              FloatingActionButton(
+                heroTag: 'fab_menu',
+                onPressed: provider.toggleMenu,
+                backgroundColor: const Color(0xff006600),
+                child: AnimatedIcon(
+                  icon: AnimatedIcons.menu_close,
+                  progress: AlwaysStoppedAnimation(provider.isMenuOpen ? 1.0 : 0.0),
+                  color: Colors.white,
                 ),
               ),
             ],
-          ),
-        ),
-      ),
-      floatingActionButton: Column(
-        mainAxisAlignment: MainAxisAlignment.end,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          AnimatedOpacity(
-            opacity: _isMenuOpen ? 1.0 : 0.0,
-            duration: const Duration(milliseconds: 200),
-            child: Column(
-              children: [
-                FloatingActionButton.extended(
-                  heroTag: 'fab_department',
-                  onPressed: () {
-                    Navigator.push(context, MaterialPageRoute(builder: (context) => const EmployeeListScreen()));
-                    _toggleMenu();
-                  },
-                  backgroundColor: Colors.white,
-                  foregroundColor: Colors.black,
-                  label: const Text('Department'),
-                  icon: const Icon(Icons.business),
-                  elevation: 4,
-                ),
-                const SizedBox(height: 10),
-                FloatingActionButton.extended(
-                  heroTag: 'fab_group',
-                  onPressed: () {
-                    Navigator.push(context, MaterialPageRoute(builder: (context) => const ProjectListScreen()));
-                    _toggleMenu();
-                  },
-                  backgroundColor: Colors.white,
-                  foregroundColor: Colors.black,
-                  label: const Text('Group'),
-                  icon: const Icon(Icons.group),
-                  elevation: 4,
-                ),
-                const SizedBox(height: 10),
-                FloatingActionButton.extended(
-                  heroTag: 'fab_analyzer',
-                  onPressed: () {
-                    Navigator.push(context, MaterialPageRoute(builder: (context) => const AnalyzerScreen()));
-                    _toggleMenu();
-                  },
-                  backgroundColor: Colors.white,
-                  foregroundColor: Colors.black,
-                  label: const Text('Analyzer'),
-                  icon: const Icon(Icons.analytics),
-                  elevation: 4,
-                ),
-                const SizedBox(height: 10),
-              ],
-            ),
-          ),
-          FloatingActionButton(
-            heroTag: 'fab_menu',
-            onPressed: _toggleMenu,
-            backgroundColor: const Color(0xff006600),
-            child: AnimatedIcon(
-              icon: AnimatedIcons.menu_close,
-              progress: _animationController,
-              color: Colors.white,
-            ),
-          ),
-        ],
+          );
+        },
       ),
     );
   }
@@ -601,11 +622,4 @@ class ProjectStatusList extends StatelessWidget {
       },
     );
   }
-}
-
-class DashboardHome extends StatefulWidget {
-  const DashboardHome({super.key});
-
-  @override
-  State<DashboardHome> createState() => _DashboardHomeState();
 }

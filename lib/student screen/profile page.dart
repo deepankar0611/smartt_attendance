@@ -28,19 +28,20 @@ class _ModernProfilePageState extends State<ModernProfilePage> with SingleTicker
   late AnimationController _controller;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
+  late Animation<double> _scaleAnimation;
 
   @override
   void initState() {
     super.initState();
     _controller = AnimationController(
-      duration: const Duration(milliseconds: 800),
+      duration: const Duration(milliseconds: 1000),
       vsync: this,
     );
 
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
         parent: _controller,
-        curve: Curves.easeOut,
+        curve: const Interval(0.0, 0.6, curve: Curves.easeOut),
       ),
     );
 
@@ -50,7 +51,14 @@ class _ModernProfilePageState extends State<ModernProfilePage> with SingleTicker
     ).animate(
       CurvedAnimation(
         parent: _controller,
-        curve: Curves.easeOut,
+        curve: const Interval(0.0, 0.6, curve: Curves.easeOut),
+      ),
+    );
+
+    _scaleAnimation = Tween<double>(begin: 0.8, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: const Interval(0.0, 0.6, curve: Curves.easeOut),
       ),
     );
 
@@ -156,37 +164,41 @@ class _ModernProfilePageState extends State<ModernProfilePage> with SingleTicker
         opacity: _fadeAnimation,
         child: SlideTransition(
           position: _slideAnimation,
-          child: Consumer<ProfileScreenProvider>(
-            builder: (context, provider, child) {
-              if (provider.isLoading) {
-                return _buildShimmerLoading();
-              }
-              return SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
-                child: Column(
-                  children: [
-                    _buildProfileHeader(context, provider, gradientStart, gradientEnd),
-                    const SizedBox(height: 16),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 24),
-                      child: _buildUserStatsRow(provider),
-                    ),
-                    const SizedBox(height: 16),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 24),
-                      child: _buildOptionsCard(context, baseColor),
-                    ),
-                    const SizedBox(height: 20),
-                  ],
-                ),
-              );
-            },
+          child: ScaleTransition(
+            scale: _scaleAnimation,
+            child: Consumer<ProfileScreenProvider>(
+              builder: (context, provider, child) {
+                if (provider.isLoading) {
+                  return _buildShimmerLoading();
+                }
+                return SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  child: Column(
+                    children: [
+                      _buildProfileHeader(context, provider, gradientStart, gradientEnd),
+                      const SizedBox(height: 24),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                        child: _buildUserStatsRow(provider),
+                      ),
+                      const SizedBox(height: 24),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                        child: _buildOptionsCard(context, baseColor),
+                      ),
+                      const SizedBox(height: 20),
+                    ],
+                  ),
+                );
+              },
+            ),
           ),
         ),
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _logout(context),
         backgroundColor: baseColor,
+        elevation: 4,
         child: const Icon(Icons.logout),
       ),
     );
@@ -252,7 +264,7 @@ class _ModernProfilePageState extends State<ModernProfilePage> with SingleTicker
         borderRadius: const BorderRadius.vertical(bottom: Radius.circular(30)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.15),
+            color: Colors.black.withOpacity(0.2),
             blurRadius: 20,
             offset: const Offset(0, 10),
           ),
@@ -268,11 +280,20 @@ class _ModernProfilePageState extends State<ModernProfilePage> with SingleTicker
                 height: 130,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    colors: [gradientStart.withOpacity(0.9), gradientEnd.withOpacity(0.7)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.2),
+                      blurRadius: 10,
+                      spreadRadius: 2,
+                      offset: const Offset(0, 4),
+                    ),
+                    BoxShadow(
+                      color: Colors.white.withOpacity(0.1),
+                      blurRadius: 5,
+                      spreadRadius: -2,
+                      offset: const Offset(-2, -2),
+                    ),
+                  ],
                 ),
               ),
               Hero(
@@ -285,7 +306,6 @@ class _ModernProfilePageState extends State<ModernProfilePage> with SingleTicker
                       height: 120,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 3),
                         image: DecorationImage(
                           fit: BoxFit.cover,
                           image: provider.profileImageUrl != null && provider.profileImageUrl!.isNotEmpty
@@ -322,21 +342,28 @@ class _ModernProfilePageState extends State<ModernProfilePage> with SingleTicker
                         }
                       },
                       child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: const BoxDecoration(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: Colors.white,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.2),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
                         ),
                         child: provider.isUploading
                             ? const CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
-                        )
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
+                              )
                             : const Icon(
-                          Icons.edit,
-                          size: 20,
-                          color: Colors.black,
-                        ),
+                                Icons.edit,
+                                size: 20,
+                                color: Colors.black,
+                              ),
                       ),
                     ),
                   ],
@@ -346,10 +373,17 @@ class _ModernProfilePageState extends State<ModernProfilePage> with SingleTicker
           ),
           const SizedBox(height: 20),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
             decoration: BoxDecoration(
               color: Colors.black.withOpacity(0.2),
               borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
             child: Text(
               provider.name.isNotEmpty ? provider.name : "Loading...",
@@ -357,6 +391,7 @@ class _ModernProfilePageState extends State<ModernProfilePage> with SingleTicker
                 fontSize: 28,
                 fontWeight: FontWeight.w700,
                 color: Colors.white,
+                letterSpacing: 0.5,
               ),
             ),
           ),
@@ -372,10 +407,17 @@ class _ModernProfilePageState extends State<ModernProfilePage> with SingleTicker
           ),
           const SizedBox(height: 12),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             decoration: BoxDecoration(
               color: Colors.white.withOpacity(0.1),
               borderRadius: BorderRadius.circular(15),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 6,
+                  offset: const Offset(0, 3),
+                ),
+              ],
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -400,15 +442,15 @@ class _ModernProfilePageState extends State<ModernProfilePage> with SingleTicker
 
   Widget _buildUserStatsRow(ProfileScreenProvider provider) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 15,
+            offset: const Offset(0, 5),
           ),
         ],
       ),
@@ -422,16 +464,18 @@ class _ModernProfilePageState extends State<ModernProfilePage> with SingleTicker
                     Text(
                       entry.value.toString(),
                       style: const TextStyle(
-                        fontSize: 24,
+                        fontSize: 28,
                         fontWeight: FontWeight.bold,
                         color: Colors.black87,
                       ),
                     ),
+                    const SizedBox(height: 4),
                     Text(
                       entry.key,
                       style: TextStyle(
                         fontSize: 14,
                         color: Colors.grey[700],
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ],
@@ -463,7 +507,7 @@ class _ModernProfilePageState extends State<ModernProfilePage> with SingleTicker
         const SizedBox(height: 16),
         _buildOptionButton(
           icon: Icons.leave_bags_at_home,
-          label: "leave application",
+          label: "Leave Application",
           onTap: () => Navigator.push(
             context,
             MaterialPageRoute(builder: (context) => const LeaveHistoryPage()),
@@ -491,14 +535,14 @@ class _ModernProfilePageState extends State<ModernProfilePage> with SingleTicker
       onTap: onTap,
       child: Container(
         width: double.infinity,
-        height: 60,
+        height: 65,
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.2),
-              blurRadius: 8,
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 10,
               offset: const Offset(0, 4),
             ),
           ],
@@ -506,13 +550,20 @@ class _ModernProfilePageState extends State<ModernProfilePage> with SingleTicker
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, color: Colors.black, size: 24),
-            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: Colors.black, size: 24),
+            ),
+            const SizedBox(width: 12),
             Text(
               label,
               style: const TextStyle(
                 fontSize: 16,
-                fontWeight: FontWeight.w500,
+                fontWeight: FontWeight.w600,
                 color: Colors.black,
               ),
             ),
