@@ -3,12 +3,12 @@ import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
-import 'package:smartt_attendance/admin%20screen/project_list_screen.dart';
-import '../utils/attendance_utils.dart';
+import 'package:smartt_attendance/admin%20screen/admin%20home%20dashboard/project_list_screen.dart';
+import '../../utils/attendance_utils.dart';
 import 'package:smartt_attendance/providers/admin_dashboard_provider.dart';
 
-import 'addgroup.dart'; // ProjectAssignmentScreen
-import 'employee_list_screen.dart';
+import '../admin profile/employee management/employee_management_page.dart';
+import 'assign_project.dart';
 import 'analyzer_screen.dart';
 
 class AdminDashboard extends StatelessWidget {
@@ -32,24 +32,11 @@ class DashboardHome extends StatefulWidget {
 
 class _DashboardHomeState extends State<DashboardHome> with SingleTickerProviderStateMixin {
   late AnimationController _animationController;
-  bool _isMenuOpen = false;
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   late String _userId;
-  String? _profileImageUrl;
-  bool _isImageLoading = true;
 
-  Map<String, dynamic> _summaryData = {
-    'totalEmployees': 0,
-    'totalEmployeesChange': 0.0,
-    'presentToday': 0,
-    'presentTodayChange': 0.0,
-    'onLeave': 0,
-    'activeProjects': 0,
-  };
-  List<Map<String, dynamic>> _projects = [];
-  bool _isLoading = true;
 
   @override
   void initState() {
@@ -72,32 +59,18 @@ class _DashboardHomeState extends State<DashboardHome> with SingleTickerProvider
     super.dispose();
   }
 
-  void _toggleMenu() {
-    setState(() {
-      _isMenuOpen = !_isMenuOpen;
-      if (_isMenuOpen) {
-        _animationController.forward();
-      } else {
-        _animationController.reverse();
-      }
-    });
-  }
 
   Future<void> _fetchDashboardData() async {
     try {
-      setState(() => _isLoading = true);
       await _fetchSummaryData();
       await _fetchProjects();
-      setState(() => _isLoading = false);
     } catch (e) {
       print('Error fetching dashboard data: $e');
-      setState(() => _isLoading = false);
     }
   }
 
   Future<void> _fetchSummaryData() async {
     try {
-      setState(() => _isLoading = true);
 
       // Fetch friends
       QuerySnapshot friendsSnapshot = await _firestore
@@ -105,10 +78,8 @@ class _DashboardHomeState extends State<DashboardHome> with SingleTickerProvider
           .doc(_userId)
           .collection('friends')
           .get();
-      int totalFriends = friendsSnapshot.docs.length;
 
       // Calculate total friends change
-      double totalFriendsChange = 0.0;
       DateTime now = DateTime.now();
       DateTime firstDayOfCurrentMonth = DateTime(now.year, now.month, 1);
       DateTime lastDayOfPreviousMonth = firstDayOfCurrentMonth.subtract(Duration(days: 1));
@@ -124,7 +95,6 @@ class _DashboardHomeState extends State<DashboardHome> with SingleTickerProvider
       if (previousFriendsSnapshot.docs.isNotEmpty) {
         int previousFriendsCount = previousFriendsSnapshot.docs.first.get('count') ?? 0;
         if (previousFriendsCount > 0) {
-          totalFriendsChange = ((totalFriends - previousFriendsCount) / previousFriendsCount) * 100;
         }
       }
 
@@ -208,7 +178,6 @@ class _DashboardHomeState extends State<DashboardHome> with SingleTickerProvider
       }
 
       // Calculate present today change
-      double presentTodayChange = 0.0;
       DateTime yesterday = today.subtract(Duration(days: 1));
       QuerySnapshot yesterdayAttendanceSnapshot = await _firestore
           .collection('attendanceRecords')
@@ -219,45 +188,22 @@ class _DashboardHomeState extends State<DashboardHome> with SingleTickerProvider
       if (yesterdayAttendanceSnapshot.docs.isNotEmpty) {
         int yesterdayPresent = yesterdayAttendanceSnapshot.docs.first.get('present') ?? 0;
         if (yesterdayPresent > 0) {
-          presentTodayChange = ((presentToday - yesterdayPresent) / yesterdayPresent) * 100;
         }
       }
 
-      // Fetch active projects
-      QuerySnapshot projectsSnapshot = await _firestore.collection('projects').get();
-      int activeProjects = projectsSnapshot.docs.length;
 
       setState(() {
-        _summaryData = {
-          'totalEmployees': totalFriends,
-          'totalEmployeesChange': totalFriendsChange,
-          'presentToday': presentToday,
-          'presentTodayChange': presentTodayChange,
-          'onLeave': onLeave,
-          'activeProjects': activeProjects,
-        };
-        _isLoading = false;
       });
     } catch (e) {
       print('Error fetching summary data: $e');
-      setState(() => _isLoading = false);
     }
   }
 
-  // Helper method to parse date strings like "April 2, 2025 at 12:00:00 AM UTC+5:30"
-  DateTime _parseDateTime(String dateStr) {
-    try {
-      String cleanedDateStr = dateStr.replaceAll(" UTC+5:30", "");
-      return DateFormat("MMMM d, yyyy 'at' h:mm:ss a").parse(cleanedDateStr);
-    } catch (e) {
-      print('Error parsing date: $dateStr, Error: $e');
-      rethrow; // Rethrow to catch in the calling function
-    }
-  }
+
 
   Future<void> _fetchProjects() async {
     QuerySnapshot projectsSnapshot = await _firestore.collection('projects').get();
-    List<Map<String, dynamic>> projects = projectsSnapshot.docs.map((doc) {
+    projectsSnapshot.docs.map((doc) {
       var data = doc.data() as Map<String, dynamic>;
       return {
         'name': data['name'] ?? 'Unknown',
@@ -268,7 +214,6 @@ class _DashboardHomeState extends State<DashboardHome> with SingleTickerProvider
       };
     }).toList();
 
-    setState(() => _projects = projects);
   }
 
   Color _getTeamColor(String team) {
@@ -292,13 +237,10 @@ class _DashboardHomeState extends State<DashboardHome> with SingleTickerProvider
       final teacherDoc = await _firestore.collection('teachers').doc(_userId).get();
       if (teacherDoc.exists) {
         setState(() {
-          _profileImageUrl = teacherDoc.data()?['profileImageUrl'];
-          _isImageLoading = false;
         });
       }
     } catch (e) {
       print('Error loading profile image: $e');
-      setState(() => _isImageLoading = false);
     }
   }
 
@@ -408,27 +350,27 @@ class _DashboardHomeState extends State<DashboardHome> with SingleTickerProvider
                 child: Column(
                   children: [
                     FloatingActionButton.extended(
-                      heroTag: 'fab_department',
+                      heroTag: 'fab_employee',
                       onPressed: () {
-                        Navigator.push(context, MaterialPageRoute(builder: (context) => const EmployeeListScreen()));
+                        Navigator.push(context, MaterialPageRoute(builder: (context) => const EmployeeManagementPage()));
                         provider.toggleMenu();
                       },
                       backgroundColor: Colors.white,
                       foregroundColor: Colors.black,
-                      label: const Text('Department'),
+                      label: const Text('Employee List'),
                       icon: const Icon(Icons.business),
                       elevation: 4,
                     ),
                     const SizedBox(height: 10),
                     FloatingActionButton.extended(
-                      heroTag: 'fab_group',
+                      heroTag: 'fab_project',
                       onPressed: () {
                         Navigator.push(context, MaterialPageRoute(builder: (context) => const ProjectListScreen()));
                         provider.toggleMenu();
                       },
                       backgroundColor: Colors.white,
                       foregroundColor: Colors.black,
-                      label: const Text('Group'),
+                      label: const Text('Project'),
                       icon: const Icon(Icons.group),
                       elevation: 4,
                     ),
@@ -482,16 +424,13 @@ class SummaryCards extends StatelessWidget {
       mainAxisSpacing: 12,
       childAspectRatio: 1.5,
       children: [
-        InkWell(
-          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const EmployeeListScreen())),
-          child: _buildSummaryCard(
-            context,
-            title: 'Total Employees',
-            value: summaryData['totalEmployees'].toString(),
-            changePercentage: summaryData['totalEmployeesChange'],
-            iconData: Icons.people,
-            iconColor: Colors.blue,
-          ),
+        _buildSummaryCard(
+          context,
+          title: 'Total Employees',
+          value: summaryData['totalEmployees'].toString(),
+          changePercentage: summaryData['totalEmployeesChange'],
+          iconData: Icons.people,
+          iconColor: Colors.blue,
         ),
         _buildSummaryCard(
           context,
@@ -573,7 +512,7 @@ class SummaryCards extends StatelessWidget {
 class ProjectStatusList extends StatelessWidget {
   final List<Map<String, dynamic>> projects;
 
-  const ProjectStatusList({Key? key, required this.projects}) : super(key: key);
+  const ProjectStatusList({super.key, required this.projects});
 
   @override
   Widget build(BuildContext context) {

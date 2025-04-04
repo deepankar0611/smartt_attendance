@@ -4,9 +4,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:intl/intl.dart'; // Add this import for DateFormat
-import '../utils/attendance_utils.dart';
+import '../../utils/attendance_utils.dart';
 import 'package:provider/provider.dart';
-import '../providers/employee_list_provider.dart';
+import '../../providers/employee_list_provider.dart';
 
 class EmployeeAttendanceScreen extends StatelessWidget {
   const EmployeeAttendanceScreen({Key? key}) : super(key: key);
@@ -654,7 +654,7 @@ class _EmployeeAttendanceContentState extends State<_EmployeeAttendanceContent> 
                               children: [
                                 Icon(provider.getPositionIcon(employee['position']), size: 16, color: Colors.grey[600]),
                                 const SizedBox(width: 6),
-                                Text('${employee['position']} | ${employee['status']}', style: TextStyle(color: Colors.grey[800], fontSize: 14)),
+                                Text(employee['position'], style: TextStyle(color: Colors.grey[800], fontSize: 14)),
                               ],
                             ),
                             const SizedBox(height: 12),

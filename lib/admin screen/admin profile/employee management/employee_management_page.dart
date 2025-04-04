@@ -335,12 +335,84 @@ class _EmployeeManagementPageState extends State<EmployeeManagementPage> {
             },
           ),
           ListTile(
+            leading: const Icon(Icons.work),
+            title: const Text('Set Job Profile'),
+            onTap: () {
+              Navigator.pop(context);
+              _showJobProfileDialog(studentId);
+            },
+          ),
+          ListTile(
             leading: const Icon(Icons.delete, color: Colors.red),
             title: const Text('Remove Employee', style: TextStyle(color: Colors.red)),
             onTap: () {
               Navigator.pop(context);
               _showDeleteConfirmation(studentId);
             },
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showJobProfileDialog(String studentId) {
+    final List<String> jobProfiles = [
+      'Software Engineer',
+      'Designer',
+      'Data Scientist',
+      'Sales Representative',
+      'Customer Support',
+      'Finance Manager',
+      'HR Manager',
+      'Marketing Specialist'
+    ];
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Select Job Profile'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: jobProfiles.length,
+            itemBuilder: (context, index) {
+              return ListTile(
+                title: Text(jobProfiles[index]),
+                onTap: () async {
+                  try {
+                    // First check if the document exists
+                    final docSnapshot = await _firestore.collection('students').doc(studentId).get();
+                    
+                    if (!docSnapshot.exists) {
+                      // Create new document with job field
+                      await _firestore.collection('students').doc(studentId).set({
+                        'job': jobProfiles[index],
+                        'createdAt': FieldValue.serverTimestamp(),
+                      });
+                    } else {
+                      // Update existing document
+                      await _firestore.collection('students').doc(studentId).update({
+                        'job': jobProfiles[index],
+                        'updatedAt': FieldValue.serverTimestamp(),
+                      });
+                    }
+                    
+                    Navigator.pop(context);
+                    _showSnackBar('Job profile updated successfully');
+                  } catch (e) {
+                    Navigator.pop(context);
+                    _showSnackBar('Error updating job profile: $e');
+                  }
+                },
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
           ),
         ],
       ),

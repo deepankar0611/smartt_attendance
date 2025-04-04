@@ -109,36 +109,22 @@ class AdminDashboardProvider extends ChangeNotifier {
         if (studentDoc.exists) {
           var data = studentDoc.data() as Map<String, dynamic>;
 
+          // Check for present today
           if (data.containsKey('checkInTime') && data['checkInTime'] != null) {
             try {
               Timestamp checkInTimestamp = data['checkInTime'] as Timestamp;
               DateTime checkInDate = checkInTimestamp.toDate();
+              DateTime checkInDateOnly = DateTime(checkInDate.year, checkInDate.month, checkInDate.day);
               
-              if (DateTime(checkInDate.year, checkInDate.month, checkInDate.day).isAtSameMomentAs(today)) {
-                DateTime? checkOutDate;
-                if (data.containsKey('checkOutTime') && data['checkOutTime'] != null) {
-                  Timestamp checkOutTimestamp = data['checkOutTime'] as Timestamp;
-                  checkOutDate = checkOutTimestamp.toDate();
-                }
-
-                final checkInTime = checkInDate;
-                final checkOutTime = checkOutDate;
-
-                final status = await AttendanceUtils.calculateAttendanceStatus(
-                  checkInTime,
-                  checkOutTime,
-                  teacherId: _userId,
-                );
-
-                if (status == AttendanceStatus.onTime) {
-                  presentToday++;
-                }
+              if (checkInDateOnly.isAtSameMomentAs(today)) {
+                presentToday++;
               }
             } catch (e) {
               print('Error parsing checkInTime for $friendUid: $e');
             }
           }
 
+          // Check for leaves
           QuerySnapshot leaveSnapshot = await _firestore
               .collection('students')
               .doc(friendUid)

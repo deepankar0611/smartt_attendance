@@ -3,18 +3,19 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 
-class AdminDashboardPage extends StatefulWidget {
-  const AdminDashboardPage({Key? key}) : super(key: key);
+class LeaveApprovePage extends StatefulWidget {
+  const LeaveApprovePage({Key? key}) : super(key: key);
 
   @override
-  State<AdminDashboardPage> createState() => _AdminDashboardPageState();
+  State<LeaveApprovePage> createState() => _LeaveApprovePageState();
 }
 
-class _AdminDashboardPageState extends State<AdminDashboardPage> {
+class _LeaveApprovePageState extends State<LeaveApprovePage> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
   List<String> _friendIds = [];
   bool _isLoading = true;
+  final Map<String, String> _employeeNames = {};
 
   @override
   void initState() {
@@ -47,6 +48,11 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
         _friendIds = friendsSnapshot.docs.map((doc) => doc.id).toList();
         _isLoading = false;
       });
+
+      // Fetch names for all friends
+      for (String friendId in _friendIds) {
+        await _fetchEmployeeName(friendId);
+      }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -59,6 +65,20 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
       setState(() {
         _isLoading = false;
       });
+    }
+  }
+
+  Future<void> _fetchEmployeeName(String employeeId) async {
+    try {
+      final doc = await _firestore.collection('students').doc(employeeId).get();
+      if (doc.exists) {
+        final data = doc.data() as Map<String, dynamic>;
+        setState(() {
+          _employeeNames[employeeId] = data['name'] ?? 'Unknown Employee';
+        });
+      }
+    } catch (e) {
+      print('Error fetching employee name: $e');
     }
   }
 
@@ -121,7 +141,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _friendIds.isEmpty
-          ? const Center(child: Text('No students found in your friend list'))
+          ? const Center(child: Text('No employees found in your list'))
           : Padding(
         padding: const EdgeInsets.all(16.0),
         child: StreamBuilder<QuerySnapshot>(
@@ -134,7 +154,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
               : null,
           builder: (context, leaveSnapshot) {
             if (_friendIds.isEmpty) {
-              return const Center(child: Text('No students found in your friend list'));
+              return const Center(child: Text('No employees found in your list'));
             }
 
             if (leaveSnapshot.connectionState == ConnectionState.waiting) {
@@ -160,6 +180,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                 final endDate = (leaveData['endDate'] as Timestamp?)?.toDate();
                 final reason = leaveData['reason'] ?? 'No reason provided';
                 final status = leaveData['status'] ?? 'Pending';
+                final employeeName = _employeeNames[studentId] ?? 'Loading...';
 
                 return Card(
                   elevation: 4,
@@ -209,8 +230,11 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Student ID: $studentId',
-                          style: TextStyle(color: Colors.grey[600]),
+                          'Employee: $employeeName',
+                          style: TextStyle(
+                            color: Colors.grey[600],
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                         const SizedBox(height: 8),
                         Row(

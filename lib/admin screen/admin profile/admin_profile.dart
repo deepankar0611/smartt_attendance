@@ -1,187 +1,70 @@
 import 'dart:ui';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'dart:io';
-import 'package:image_picker/image_picker.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:intl/intl.dart';
-import '../student screen/delete_account_page.dart';
-import '../student screen/login_screen.dart';
-import '../student screen/password.dart';
-import 'FriendRequestPage.dart';
+import 'package:provider/provider.dart';
+import '../../student screen/delete_account_page.dart';
+import '../../student screen/login_screen.dart';
+import '../../student screen/password.dart';
 import 'admin_edit_profile_sheet.dart';
-import 'leave_approve_page.dart';
-import 'employee_management_page.dart';
+import 'employee management/employee_management_page.dart';
+import '../../providers/admin_profile_provider.dart';
+import 'leave/leave_approve_page.dart';
 
 class AdminProfilePage extends StatefulWidget {
   final String? adminId;
 
-  const AdminProfilePage({Key? key, this.adminId}) : super(key: key);
+  const AdminProfilePage({super.key, this.adminId});
 
   @override
   _AdminProfilePageState createState() => _AdminProfilePageState();
 }
 
-class _AdminProfilePageState extends State<AdminProfilePage> {
-  String? _profileImageUrl;
-  String _name = "Admin User";
-  String _location = "Head Office";
-  String _mobile = "7479519946";
-  String _email = "admin@example.com";
-  String _joinDate = "01-01-2023";
-  final Map<String, int> _stats = {
-    'employees': 0,
-    'projects': 12,
-  };
-
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+class _AdminProfilePageState extends State<AdminProfilePage> with SingleTickerProviderStateMixin {
+  late AnimationController _animationController;
+  late Animation<double> _fadeAnimation;
+  late Animation<Offset> _slideAnimation;
   late String _userId;
-  final ImagePicker _picker = ImagePicker();
-  final SupabaseClient _supabase = Supabase.instance.client;
-  bool _isUploading = false;
 
   @override
   void initState() {
     super.initState();
-    _userId = widget.adminId ?? _auth.currentUser?.uid ?? '';
-    if (_userId.isEmpty) {
-      print('No user is currently signed in.');
-    } else {
-      _fetchAdminProfile();
-      _fetchSummaryData();
+    _userId = widget.adminId ?? FirebaseAuth.instance.currentUser?.uid ?? '';
+    
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
+
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _animationController,
+        curve: Curves.easeInOut,
+      ),
+    );
+
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(0, 0.1),
+      end: Offset.zero,
+    ).animate(
+      CurvedAnimation(
+        parent: _animationController,
+        curve: Curves.easeOut,
+      ),
+    );
+
+    _animationController.forward();
+
+    if (_userId.isNotEmpty) {
+      final provider = Provider.of<AdminProfileProvider>(context, listen: false);
+      provider.fetchAdminProfile(_userId);
+      provider.fetchSummaryData(_userId);
     }
   }
 
-  Future<void> _fetchAdminProfile() async {
-    try {
-      DocumentSnapshot userDoc = await _firestore.collection('teachers').doc(_userId).get();
-      if (userDoc.exists) {
-        final data = userDoc.data() as Map<String, dynamic>;
-        String formattedJoinDate = "01-01-2023";
-        if (data['createdAt'] != null) {
-          Timestamp createdAt = data['createdAt'] as Timestamp;
-          DateTime dateTime = createdAt.toDate();
-          formattedJoinDate = DateFormat('dd-MM-yyyy').format(dateTime);
-        }
-
-        setState(() {
-          _name = data['name'] ?? "Admin User";
-          _location = data['location'] ?? "Head Office";
-          _mobile = data['mobile'] ?? "7479519946";
-          _email = data['email'] ?? "admin@example.com";
-          _joinDate = formattedJoinDate;
-          _profileImageUrl = data['profileImageUrl'];
-        });
-      } else {
-        await _firestore.collection('teachers').doc(_userId).set({
-          'name': _name,
-          'location': _location,
-          'mobile': _mobile,
-          'email': _auth.currentUser?.email ?? 'admin@example.com',
-          'joinDate': _joinDate,
-          'createdAt': FieldValue.serverTimestamp(),
-          'isEmailVerified': _auth.currentUser?.emailVerified ?? false,
-          'profileImageUrl': null,
-        }, SetOptions(merge: true));
-      }
-    } catch (e) {
-      _showSnackBar('Error fetching admin profile: $e');
-    }
-  }
-
-  Future<void> _fetchSummaryData() async {
-    try {
-      // Fetch employees count
-      QuerySnapshot friendsSnapshot = await _firestore
-          .collection('teachers')
-          .doc(_userId)
-          .collection('friends')
-          .get();
-      int totalFriends = friendsSnapshot.docs.length;
-      print('Total friends fetched: $totalFriends');
-
-      // Fetch active projects count
-      QuerySnapshot projectsSnapshot = await _firestore.collection('projects').get();
-      int activeProjects = projectsSnapshot.docs.length;
-      print('Active projects: $activeProjects');
-
-      setState(() {
-        _stats['employees'] = totalFriends;
-        _stats['projects'] = activeProjects;
-      });
-    } catch (e) {
-      _showSnackBar('Error fetching summary data: $e');
-    }
-  }
-
-  Future<void> _pickAndUploadImage() async {
-    try {
-      final ImageSource? source = await showDialog<ImageSource>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Select Image Source'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, ImageSource.gallery),
-              child: const Text('Gallery'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context, ImageSource.camera),
-              child: const Text('Camera'),
-            ),
-          ],
-        ),
-      );
-
-      if (source == null) return;
-
-      final XFile? pickedFile = await _picker.pickImage(
-        source: source,
-        imageQuality: 80,
-      );
-
-      if (pickedFile == null) return;
-
-      setState(() {
-        _isUploading = true;
-      });
-
-      String fileName = '$_userId-${DateTime.now().millisecondsSinceEpoch}.jpg';
-      File imageFile = File(pickedFile.path);
-
-      if (_profileImageUrl != null && _profileImageUrl!.isNotEmpty) {
-        String oldFileName = _profileImageUrl!.split('/').last;
-        try {
-          await _supabase.storage.from('profile_pictures').remove([oldFileName]);
-        } catch (e) {
-          print('Error deleting old image: $e');
-        }
-      }
-
-      await _supabase.storage
-          .from('profile_pictures')
-          .upload(fileName, imageFile, fileOptions: const FileOptions(upsert: true));
-
-      final String imageUrl = _supabase.storage.from('profile_pictures').getPublicUrl(fileName);
-
-      await _firestore.collection('teachers').doc(_userId).update({
-        'profileImageUrl': imageUrl,
-      });
-
-      setState(() {
-        _profileImageUrl = imageUrl;
-      });
-
-      _showSnackBar('Profile picture updated successfully');
-    } catch (e) {
-      _showSnackBar('Error uploading image: $e');
-    } finally {
-      setState(() {
-        _isUploading = false;
-      });
-    }
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
   }
 
   void _showSnackBar(String message) {
@@ -213,7 +96,7 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(builder: (context) => LoginScreen()),
-            (route) => false,
+        (route) => false,
       );
     } catch (e) {
       Navigator.of(context, rootNavigator: true).pop();
@@ -222,6 +105,7 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
   }
 
   void _showEditProfileSheet() async {
+    final provider = Provider.of<AdminProfileProvider>(context, listen: false);
     final result = await showModalBottomSheet<Map<String, String>>(
       context: context,
       isScrollControlled: true,
@@ -240,9 +124,9 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
                 right: 16,
               ),
               child: AdminEditProfileSheet(
-                initialName: _name,
-                initialLocation: _location,
-                initialMobile: _mobile,
+                initialName: provider.name,
+                initialLocation: provider.location,
+                initialMobile: provider.mobile,
               ),
             ),
           ),
@@ -251,22 +135,13 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
     );
 
     if (result != null) {
-      setState(() {
-        _name = result['name'] ?? _name;
-        _location = result['location'] ?? _location;
-        _mobile = result['mobile'] ?? _mobile;
-      });
-
-      try {
-        await _firestore.collection('teachers').doc(_userId).update({
-          'name': _name,
-          'location': _location,
-          'mobile': _mobile,
-        });
-        _showSnackBar('Admin profile updated successfully');
-      } catch (e) {
-        _showSnackBar('Error updating admin profile: $e');
-      }
+      await provider.updateProfile(
+        _userId,
+        result['name'] ?? provider.name,
+        result['location'] ?? provider.location,
+        result['mobile'] ?? provider.mobile,
+      );
+      _showSnackBar('Admin profile updated successfully');
     }
   }
 
@@ -280,7 +155,7 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
   void _navigateToManageLeaves() {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const AdminDashboardPage()),
+      MaterialPageRoute(builder: (context) => const LeaveApprovePage()),
     );
   }
 
@@ -300,68 +175,78 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
         elevation: 0,
         toolbarHeight: 0,
       ),
-      body: Stack(
-        children: [
-          // Gradient background container
-          Container(
-            height: 300,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topRight,
-                end: Alignment.bottomLeft,
-                colors: [
-                  Colors.green.shade900,
-                  Colors.green.shade800,
+      body: Consumer<AdminProfileProvider>(
+        builder: (context, provider, child) {
+          return Stack(
+            children: [
+              // Gradient background container
+              Container(
+                height: 300,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topRight,
+                    end: Alignment.bottomLeft,
+                    colors: [
+                      Colors.green.shade900,
+                      Colors.green.shade800,
+                    ],
+                  ),
+                ),
+              ),
+              // Scrollable content
+              CustomScrollView(
+                physics: const BouncingScrollPhysics(),
+                slivers: [
+                  SliverToBoxAdapter(
+                    child: FadeTransition(
+                      opacity: _fadeAnimation,
+                      child: SlideTransition(
+                        position: _slideAnimation,
+                        child: Column(
+                          children: [
+                            _buildProfileHeader(provider),
+                            const SizedBox(height: 24),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 24),
+                              child: _buildAdminInfoCard(provider),
+                            ),
+                            const SizedBox(height: 24),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 24),
+                              child: _buildUserStatsRow(provider),
+                            ),
+                            const SizedBox(height: 24),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 24),
+                              child: _buildOptionsCard(),
+                            ),
+                            const SizedBox(height: 40),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
                 ],
               ),
-            ),
-          ),
-          // Scrollable content
-          CustomScrollView(
-            physics: const BouncingScrollPhysics(),
-            slivers: [
-              SliverToBoxAdapter(
-                child: Column(
-                  children: [
-                    _buildProfileHeader(),
-                    const SizedBox(height: 24),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 24),
-                      child: _buildAdminInfoCard(),
-                    ),
-                    const SizedBox(height: 24),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 24),
-                      child: _buildUserStatsRow(),
-                    ),
-                    const SizedBox(height: 24),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 24),
-                      child: _buildOptionsCard(),
-                    ),
-                    const SizedBox(height: 40),
-                  ],
+              // Floating action button
+              Positioned(
+                right: 24,
+                bottom: 24,
+                child: FloatingActionButton(
+                  onPressed: _logout,
+                  backgroundColor: Colors.green.shade900,
+                  elevation: 4,
+                  child: const Icon(Icons.logout, color: Colors.white),
                 ),
               ),
             ],
-          ),
-          // Floating action button
-          Positioned(
-            right: 24,
-            bottom: 24,
-            child: FloatingActionButton(
-              onPressed: _logout,
-              backgroundColor: Colors.green.shade900,
-              elevation: 4,
-              child: const Icon(Icons.logout, color: Colors.white),
-            ),
-          ),
-        ],
+          );
+        },
       ),
     );
   }
 
-  Widget _buildProfileHeader() {
+  Widget _buildProfileHeader(AdminProfileProvider provider) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 30, horizontal: 20),
@@ -412,14 +297,14 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
                         ],
                         image: DecorationImage(
                           fit: BoxFit.cover,
-                          image: _profileImageUrl != null && _profileImageUrl!.isNotEmpty
-                              ? NetworkImage(_profileImageUrl!)
+                          image: provider.profileImageUrl != null && provider.profileImageUrl!.isNotEmpty
+                              ? NetworkImage(provider.profileImageUrl!)
                               : const AssetImage('assets/admin_default.jpg') as ImageProvider,
                         ),
                       ),
                     ),
                     GestureDetector(
-                      onTap: _isUploading ? null : _pickAndUploadImage,
+                      onTap: provider.isUploading ? null : () => provider.pickAndUploadImage(_userId),
                       child: Container(
                         padding: const EdgeInsets.all(4),
                         decoration: BoxDecoration(
@@ -433,7 +318,7 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
                             ),
                           ],
                         ),
-                        child: _isUploading
+                        child: provider.isUploading
                             ? const CircularProgressIndicator(
                                 strokeWidth: 2,
                                 valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
@@ -465,7 +350,7 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
               ],
             ),
             child: Text(
-              _name,
+              provider.name,
               style: const TextStyle(
                 fontSize: 28,
                 fontWeight: FontWeight.w700,
@@ -491,7 +376,7 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
                 const Icon(Icons.location_on, color: Colors.white, size: 18),
                 const SizedBox(width: 8),
                 Text(
-                  _location,
+                  provider.location,
                   style: const TextStyle(
                     fontSize: 14,
                     color: Colors.white,
@@ -506,7 +391,7 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
     );
   }
 
-  Widget _buildAdminInfoCard() {
+  Widget _buildAdminInfoCard(AdminProfileProvider provider) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -522,11 +407,11 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
       ),
       child: Column(
         children: [
-          _buildInfoRow(Icons.email, "Email", _email),
+          _buildInfoRow(Icons.email, "Email", provider.email),
           const Divider(height: 24),
-          _buildInfoRow(Icons.phone, "Mobile", _mobile),
+          _buildInfoRow(Icons.phone, "Mobile", provider.mobile),
           const Divider(height: 24),
-          _buildInfoRow(Icons.calendar_today, "Join Date", _joinDate),
+          _buildInfoRow(Icons.calendar_today, "Join Date", provider.joinDate),
         ],
       ),
     );
@@ -570,7 +455,7 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
     );
   }
 
-  Widget _buildUserStatsRow() {
+  Widget _buildUserStatsRow(AdminProfileProvider provider) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -586,7 +471,7 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: _stats.entries.map((entry) => _buildStatItem(entry)).toList(),
+        children: provider.stats.entries.map((entry) => _buildStatItem(entry)).toList(),
       ),
     );
   }

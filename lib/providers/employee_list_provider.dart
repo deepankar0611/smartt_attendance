@@ -257,7 +257,6 @@ class EmployeeListProvider extends ChangeNotifier {
         Map<String, dynamic> employee = {
           'name': studentData['name'] ?? 'Unknown',
           'position': job,
-          'status': 'Regular',
           'loginTime': loginTime,
           'checkOutTime': checkOutTime,
           'attendance': status,

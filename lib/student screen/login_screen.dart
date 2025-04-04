@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:smartt_attendance/admin_bottom_nav.dart';
+import 'package:smartt_attendance/admin%20screen/admin_bottom_nav.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../bottom_navigation_bar.dart';
+import 'bottom_navigation_bar.dart';
 import 'Sign Up.dart';
 
 enum UserType { student, teacher }

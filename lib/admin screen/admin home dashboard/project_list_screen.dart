@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:smartt_attendance/admin%20screen/project_details_screen.dart';
-import 'addgroup.dart';
+import 'package:smartt_attendance/admin%20screen/admin%20home%20dashboard/project_details_screen.dart';
+import 'assign_project.dart';
 
 class ProjectListScreen extends StatefulWidget {
   const ProjectListScreen({super.key});

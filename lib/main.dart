@@ -1,8 +1,8 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:smartt_attendance/admin_bottom_nav.dart';
-import 'package:smartt_attendance/bottom_navigation_bar.dart';
+import 'package:smartt_attendance/admin%20screen/admin_bottom_nav.dart';
+import 'package:smartt_attendance/student%20screen/bottom_navigation_bar.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:smartt_attendance/student%20screen/login_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as sp;
@@ -14,6 +14,7 @@ import 'package:smartt_attendance/providers/leave_provider.dart';
 import 'package:smartt_attendance/providers/leave_history_provider.dart';
 import 'package:smartt_attendance/providers/admin_dashboard_provider.dart';
 import 'package:smartt_attendance/providers/employee_list_provider.dart';
+import 'package:smartt_attendance/providers/admin_profile_provider.dart';
 import 'firebase_options.dart';
 
 Future<void> main() async {
@@ -95,6 +96,9 @@ class MyApp extends StatelessWidget {
         ),
         ChangeNotifierProvider(
           create: (_) => EmployeeListProvider(),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => AdminProfileProvider(),
         ),
       ],
       child: MaterialApp(
