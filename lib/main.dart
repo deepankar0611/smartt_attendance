@@ -1,3 +1,4 @@
+// main.dart
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -16,6 +17,8 @@ import 'package:smartt_attendance/providers/admin_dashboard_provider.dart';
 import 'package:smartt_attendance/providers/employee_list_provider.dart';
 import 'package:smartt_attendance/providers/admin_profile_provider.dart';
 import 'firebase_options.dart';
+import 'Splashscreen.dart';
+import 'welcome.dart'; // Add this import
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -25,49 +28,68 @@ Future<void> main() async {
   await sp.Supabase.initialize(
     url: 'https://xzoyevujxvqaumrdskhd.supabase.co',
     anonKey:
-        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh6b3lldnVqeHZxYXVtcmRza2hkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzkyMTE1MjMsImV4cCI6MjA1NDc4NzUyM30.mbV_Scy2fXbMalxVRGHNKOxYx0o6t-nUPmDLlH5Mr_U',
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh6b3lldnVqeHZxYXVtcmRza2hkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzkyMTE1MjMsImV4cCI6MjA1NDc4NzUyM30.mbV_Scy2fXbMalxVRGHNKOxYx0o6t-nUPmDLlH5Mr_U',
   );
-  runApp(const MyApp());
+  runApp(const SplashApp());
+}
+
+class SplashApp extends StatelessWidget {
+  const SplashApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: SplashScreen(),
+    );
+  }
 }
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  // Method to determine the initial home page based on user role
   Future<Widget> _getInitialHomePage() async {
     User? user = FirebaseAuth.instance.currentUser;
 
     if (user == null) {
-      // User is logged out, return LoginScreen
       return const LoginScreen();
     }
 
-    // User is logged in, check their role in Firestore
     try {
-      // Check 'students' collection first
+      // Check if user has seen welcome screen
+      DocumentSnapshot userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+
+      bool hasSeenWelcome = userDoc.exists && userDoc['hasSeenWelcome'] == true;
+
+      if (!hasSeenWelcome) {
+        return WelcomeScreen();
+      }
+
+      // Check student role
       DocumentSnapshot studentDoc = await FirebaseFirestore.instance
           .collection('students')
           .doc(user.uid)
           .get();
 
       if (studentDoc.exists) {
-        return const HomeScreen(); // Student logged in
+        return const HomeScreen();
       }
 
-      // If not found in 'students', check 'teachers' collection
+      // Check teacher role
       DocumentSnapshot teacherDoc = await FirebaseFirestore.instance
           .collection('teachers')
           .doc(user.uid)
           .get();
 
       if (teacherDoc.exists) {
-        return const AdminBottomNav(); // Teacher logged in
+        return const AdminBottomNav();
       }
 
-      // If no role is found (edge case), fallback to LoginScreen
       return const LoginScreen();
     } catch (e) {
-      // Handle any errors (e.g., Firestore unavailable) by showing LoginScreen
       return const LoginScreen();
     }
   }
@@ -76,30 +98,14 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(
-          create: (_) => AttendanceScreenProvider(),
-        ),
-        ChangeNotifierProvider(
-          create: (_) => ProfileScreenProvider(),
-        ),
-        ChangeNotifierProvider(
-          create: (_) => AttendanceHistoryProvider(),
-        ),
-        ChangeNotifierProvider(
-          create: (_) => LeaveProvider(),
-        ),
-        ChangeNotifierProvider(
-          create: (_) => LeaveHistoryProvider(),
-        ),
-        ChangeNotifierProvider(
-          create: (_) => AdminDashboardProvider(),
-        ),
-        ChangeNotifierProvider(
-          create: (_) => EmployeeListProvider(),
-        ),
-        ChangeNotifierProvider(
-          create: (_) => AdminProfileProvider(),
-        ),
+        ChangeNotifierProvider(create: (_) => AttendanceScreenProvider()),
+        ChangeNotifierProvider(create: (_) => ProfileScreenProvider()),
+        ChangeNotifierProvider(create: (_) => AttendanceHistoryProvider()),
+        ChangeNotifierProvider(create: (_) => LeaveProvider()),
+        ChangeNotifierProvider(create: (_) => LeaveHistoryProvider()),
+        ChangeNotifierProvider(create: (_) => AdminDashboardProvider()),
+        ChangeNotifierProvider(create: (_) => EmployeeListProvider()),
+        ChangeNotifierProvider(create: (_) => AdminProfileProvider()),
       ],
       child: MaterialApp(
         title: 'Flutter Demo',
@@ -112,16 +118,13 @@ class MyApp extends StatelessWidget {
           future: _getInitialHomePage(),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              // Show loading indicator while checking user state
               return const Scaffold(
                 body: Center(child: CircularProgressIndicator()),
               );
             }
             if (snapshot.hasData) {
-              // Return the determined home page (LoginScreen, HomeScreen, or TeacherAdminPanel)
               return snapshot.data!;
             }
-            // Fallback in case of error
             return const LoginScreen();
           },
         ),
