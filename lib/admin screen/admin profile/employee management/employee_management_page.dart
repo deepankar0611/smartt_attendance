@@ -424,7 +424,7 @@ class _EmployeeManagementPageState extends State<EmployeeManagementPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Remove Employee'),
-        content: const Text('Are you sure you want to remove this employee?'),
+        content: const Text('Are you sure you want to remove this employee? This action cannot be undone.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -434,12 +434,22 @@ class _EmployeeManagementPageState extends State<EmployeeManagementPage> {
             onPressed: () async {
               Navigator.pop(context);
               try {
+                // Remove from teacher's friends list
                 await _firestore
                     .collection('teachers')
                     .doc(_adminId)
                     .collection('friends')
                     .doc(studentId)
                     .delete();
+
+                // Remove from student's friends list
+                await _firestore
+                    .collection('students')
+                    .doc(studentId)
+                    .collection('friends')
+                    .doc(_adminId)
+                    .delete();
+
                 _showSnackBar('Employee removed successfully');
               } catch (e) {
                 _showSnackBar('Error removing employee: $e');
